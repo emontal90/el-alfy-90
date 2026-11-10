@@ -21,8 +21,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
   int customersCount = 0;
   int categoriesCount = 0;
   int totalStock = 0;
-  int waitingOrders = 0;
-  int deliveredOrders = 0;
+
+  // إحصائيات قائمة الانتظار مقسومة بين نمطي وأوردر
+  int waitingStandard = 0;
+  int waitingCustom = 0;
+
+  // إحصائيات تم التسليم مقسومة بين نمطي وأوردر
+  int deliveredStandard = 0;
+  int deliveredCustom = 0;
+
   int upholstererRemainingPieces = 0;
 
   @override
@@ -43,8 +50,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final cust = Sqflite.firstIntValue(await db.rawQuery('SELECT COUNT(*) FROM customers')) ?? 0;
     final cats = Sqflite.firstIntValue(await db.rawQuery('SELECT COUNT(*) FROM categories')) ?? 0;
     final stock = Sqflite.firstIntValue(await db.rawQuery('SELECT SUM(stock_qty) FROM categories')) ?? 0;
-    final wait = Sqflite.firstIntValue(await db.rawQuery("SELECT COUNT(*) FROM orders WHERE status = 'waiting'")) ?? 0;
-    final deliv = Sqflite.firstIntValue(await db.rawQuery("SELECT COUNT(*) FROM orders WHERE status = 'delivered'")) ?? 0;
+
+    // أوردرات الانتظار: نمطي vs أوردر
+    final waitStd = Sqflite.firstIntValue(await db.rawQuery(
+      "SELECT COUNT(*) FROM orders WHERE status = 'waiting' AND (order_type = 'نمطي' OR order_type = 'نمطى')"
+    )) ?? 0;
+    final waitCust = Sqflite.firstIntValue(await db.rawQuery(
+      "SELECT COUNT(*) FROM orders WHERE status = 'waiting' AND (order_type != 'نمطي' AND order_type != 'نمطى')"
+    )) ?? 0;
+
+    // الأوردرات المسلّمة: نمطي vs أوردر
+    final delivStd = Sqflite.firstIntValue(await db.rawQuery(
+      "SELECT COUNT(*) FROM orders WHERE status = 'delivered' AND (order_type = 'نمطي' OR order_type = 'نمطى')"
+    )) ?? 0;
+    final delivCust = Sqflite.firstIntValue(await db.rawQuery(
+      "SELECT COUNT(*) FROM orders WHERE status = 'delivered' AND (order_type != 'نمطي' AND order_type != 'نمطى')"
+    )) ?? 0;
+
     final uph = Sqflite.firstIntValue(await db.rawQuery('SELECT SUM(total_sent - received_qty) FROM upholsterer_batches')) ?? 0;
 
     if (mounted) {
@@ -52,8 +74,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
         customersCount = cust;
         categoriesCount = cats;
         totalStock = stock;
-        waitingOrders = wait;
-        deliveredOrders = deliv;
+        waitingStandard = waitStd;
+        waitingCustom = waitCust;
+        deliveredStandard = delivStd;
+        deliveredCustom = delivCust;
         upholstererRemainingPieces = uph;
       });
     }
@@ -94,44 +118,85 @@ class _DashboardScreenState extends State<DashboardScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            // بنر الترحيب المدمج بالشعار وبدون الملاحظة لتوفير المساحة
             Container(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
-                gradient: const LinearGradient(colors: [AppTheme.primaryNavy, Color(0xFF2B5282)]),
-                borderRadius: BorderRadius.circular(20),
+                gradient: const LinearGradient(
+                  colors: [AppTheme.primaryNavy, Color(0xFF2B5282)],
+                ),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.1),
+                    blurRadius: 6,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
               ),
-              child: const Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: Row(
                 children: [
-                  Text('مرحباً بك في نظام إدارة معرضك', style: TextStyle(color: AppTheme.royalGold, fontSize: 18, fontWeight: FontWeight.bold)),
-                  SizedBox(height: 6),
-                  Text('ملاحظة: الطلبات في قائمة الانتظار لا تُخصم من رصيد المخزن إلا بعد الضغط على زر (تم التسليم).', style: TextStyle(color: Colors.white70, fontSize: 13)),
+                  const AppLogo(size: 46, showBorder: true),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text(
+                          'مرحباً بك في نظام إدارة معرضك',
+                          style: TextStyle(
+                            color: AppTheme.royalGold,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'نظام الألفي لإدارة الأثاث والمخازن والطلبيات',
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.85),
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
             const SizedBox(height: 16),
+
+            // شبكة الكروت الإحصائية
             GridView.count(
               crossAxisCount: 2,
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               mainAxisSpacing: 12,
               crossAxisSpacing: 12,
-              childAspectRatio: 1.25,
+              childAspectRatio: 1.15,
               children: [
-                StatCard(
+                // 1. كارت قائمة الانتظار مقسوم إلى نصفين: نمطي وأوردر
+                SplitStatCard(
                   title: 'قائمة الانتظار',
-                  value: '$waitingOrders أوردر',
                   icon: Icons.pending_actions_rounded,
                   color: Colors.orange.shade800,
+                  standardCount: waitingStandard,
+                  customCount: waitingCustom,
                   onTap: () => widget.onNavigateTab?.call(1),
                 ),
-                StatCard(
+
+                // 2. كارت تم التسليم مقسوم إلى نصفين: نمطي وأوردر
+                SplitStatCard(
                   title: 'تم التسليم',
-                  value: '$deliveredOrders أوردر',
                   icon: Icons.task_alt_rounded,
                   color: Colors.green.shade700,
+                  standardCount: deliveredStandard,
+                  customCount: deliveredCustom,
                   onTap: () => widget.onNavigateTab?.call(2),
                 ),
+
+                // 3. مخزن المعرض
                 StatCard(
                   title: 'مخزن المعرض',
                   value: '$totalStock طقم جاهز',
@@ -139,6 +204,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   color: AppTheme.primaryNavy,
                   onTap: () => widget.onNavigateTab?.call(4, managementSubTab: 0),
                 ),
+
+                // 4. ورشة المنجد
                 StatCard(
                   title: 'ورشة المنجد',
                   value: '$upholstererRemainingPieces قطعة بالتشطيب',
@@ -146,6 +213,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   color: Colors.purple.shade700,
                   onTap: () => widget.onNavigateTab?.call(3),
                 ),
+
+                // 5. سجل العملاء
                 StatCard(
                   title: 'سجل العملاء',
                   value: '$customersCount عميل',
@@ -153,6 +222,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   color: Colors.teal.shade700,
                   onTap: () => widget.onNavigateTab?.call(4, managementSubTab: 2),
                 ),
+
+                // 6. قائمة الأصناف
                 StatCard(
                   title: 'قائمة الأصناف',
                   value: '$categoriesCount صنف',

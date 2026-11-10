@@ -39,7 +39,7 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
   }
 
   final _specsCtrl = TextEditingController();
-  final _typeCtrl = TextEditingController(text: 'مودرن');
+  String _orderType = 'نمطي';
   DateTime _deliveryDate = DateTime.now().add(const Duration(days: 7));
 
   @override
@@ -289,8 +289,7 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
       'selected_components_json': jsonEncode(chosenComps),
       'specs': _specsCtrl.text.trim(),
       'delivery_date': intl.DateFormat('yyyy-MM-dd').format(_deliveryDate),
-      'order_type':
-          _typeCtrl.text.trim().isEmpty ? 'مودرن' : _typeCtrl.text.trim(),
+      'order_type': _orderType,
       'sets_count': _orderSetsCount > 0 ? _orderSetsCount : 1,
       'status': 'waiting',
       'created_at': intl.DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now()),
@@ -736,13 +735,108 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
           ),
           const SizedBox(height: 12),
 
-          // 5. النوع
-          TextField(
-            controller: _typeCtrl,
-            decoration: const InputDecoration(
-              labelText: 'النوع / الستايل',
-              hintText: 'مودرن، كلاسيك، نيو كلاسيك...',
-              prefixIcon: Icon(Icons.style),
+          // 5. نوع الطلب (نمطي أو أوردر فقط)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey.shade300),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Row(
+                  children: [
+                    Icon(Icons.style_rounded, size: 20, color: AppTheme.primaryNavy),
+                    SizedBox(width: 8),
+                    Text(
+                      'نوع الطلب (نمطي / أوردر):',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppTheme.primaryNavy),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    // نمطي
+                    Expanded(
+                      child: InkWell(
+                        onTap: () => setState(() => _orderType = 'نمطي'),
+                        borderRadius: BorderRadius.circular(10),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          decoration: BoxDecoration(
+                            color: _orderType == 'نمطي' ? AppTheme.primaryNavy : Colors.grey.shade100,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: _orderType == 'نمطي' ? AppTheme.primaryNavy : Colors.grey.shade300,
+                              width: 1.5,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                _orderType == 'نمطي' ? Icons.radio_button_checked : Icons.radio_button_off,
+                                size: 18,
+                                color: _orderType == 'نمطي' ? AppTheme.royalGold : Colors.grey,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'نمطي',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.bold,
+                                  color: _orderType == 'نمطي' ? Colors.white : Colors.black87,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    // أوردر
+                    Expanded(
+                      child: InkWell(
+                        onTap: () => setState(() => _orderType = 'أوردر'),
+                        borderRadius: BorderRadius.circular(10),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          decoration: BoxDecoration(
+                            color: _orderType == 'أوردر' ? AppTheme.primaryNavy : Colors.grey.shade100,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: _orderType == 'أوردر' ? AppTheme.primaryNavy : Colors.grey.shade300,
+                              width: 1.5,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                _orderType == 'أوردر' ? Icons.radio_button_checked : Icons.radio_button_off,
+                                size: 18,
+                                color: _orderType == 'أوردر' ? AppTheme.royalGold : Colors.grey,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'أوردر',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.bold,
+                                  color: _orderType == 'أوردر' ? Colors.white : Colors.black87,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 12),

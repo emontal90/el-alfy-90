@@ -60,8 +60,9 @@ class _WaitingOrdersScreenState extends State<WaitingOrdersScreen> {
   void _openEditOrderModal(Map<String, dynamic> order) {
     final custNameCtrl = TextEditingController(text: order['customer_name']);
     final specsCtrl = TextEditingController(text: order['specs'] ?? '');
-    final typeCtrl =
-        TextEditingController(text: order['order_type'] ?? 'مودرن');
+    String selectedOrderType = (order['order_type'] == 'أوردر' || order['order_type'] == 'اوردر')
+        ? 'أوردر'
+        : 'نمطي';
     DateTime deliveryDate =
         DateTime.tryParse(order['delivery_date'] ?? '') ?? DateTime.now();
 
@@ -162,12 +163,78 @@ class _WaitingOrdersScreenState extends State<WaitingOrdersScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                TextField(
-                  controller: typeCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'النوع / الستايل',
-                    prefixIcon: Icon(Icons.style),
-                  ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: InkWell(
+                        onTap: () => setModalState(() => selectedOrderType = 'نمطي'),
+                        borderRadius: BorderRadius.circular(10),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 9),
+                          decoration: BoxDecoration(
+                            color: selectedOrderType == 'نمطي' ? AppTheme.primaryNavy : Colors.grey.shade100,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: selectedOrderType == 'نمطي' ? AppTheme.primaryNavy : Colors.grey.shade300,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                selectedOrderType == 'نمطي' ? Icons.radio_button_checked : Icons.radio_button_off,
+                                size: 16,
+                                color: selectedOrderType == 'نمطي' ? AppTheme.royalGold : Colors.grey,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                'نمطي',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: selectedOrderType == 'نمطي' ? Colors.white : Colors.black87,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: InkWell(
+                        onTap: () => setModalState(() => selectedOrderType = 'أوردر'),
+                        borderRadius: BorderRadius.circular(10),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 9),
+                          decoration: BoxDecoration(
+                            color: selectedOrderType == 'أوردر' ? AppTheme.primaryNavy : Colors.grey.shade100,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: selectedOrderType == 'أوردر' ? AppTheme.primaryNavy : Colors.grey.shade300,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                selectedOrderType == 'أوردر' ? Icons.radio_button_checked : Icons.radio_button_off,
+                                size: 16,
+                                color: selectedOrderType == 'أوردر' ? AppTheme.royalGold : Colors.grey,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                'أوردر',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: selectedOrderType == 'أوردر' ? Colors.white : Colors.black87,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 14),
                 const Divider(),
@@ -257,9 +324,7 @@ class _WaitingOrdersScreenState extends State<WaitingOrdersScreen> {
                         {
                           'customer_name': custNameCtrl.text.trim(),
                           'specs': specsCtrl.text.trim(),
-                          'order_type': typeCtrl.text.trim().isEmpty
-                              ? 'مودرن'
-                              : typeCtrl.text.trim(),
+                          'order_type': selectedOrderType,
                           'delivery_date': intl.DateFormat('yyyy-MM-dd')
                               .format(deliveryDate),
                           'selected_components_json': jsonEncode(editableComps),
