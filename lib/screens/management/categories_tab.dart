@@ -382,7 +382,7 @@ class _CategoriesTabState extends State<CategoriesTab> {
                         compsData.add({
                           'name': pName,
                           'base_qty': safeQty,
-                          'qty': safeQty,
+                          'qty': 0, // رصيد صفر لكل القطع بالمخزن عند إدراج الصنف الجديد
                         });
                       }
                     }
@@ -675,15 +675,34 @@ class _CategoriesTabState extends State<CategoriesTab> {
                     }
 
                     final compsData = <Map<String, dynamic>>[];
+                    final int existingStockQty = (cat['stock_qty'] as int?) ?? 0;
                     for (final p in pieces) {
                       final pName = p.nameCtrl.text.trim();
                       if (pName.isNotEmpty) {
                         final pQty = int.tryParse(p.qtyCtrl.text.trim()) ?? 1;
                         final safeQty = pQty > 0 ? pQty : 1;
+
+                        int currentPieceStock = 0;
+                        if (existingStockQty > 0) {
+                          final match = rawComps.firstWhere(
+                            (c) => (c['name'] ?? '').toString().trim() == pName,
+                            orElse: () => null,
+                          );
+                          if (match != null && match['qty'] != null) {
+                            currentPieceStock = (match['qty'] is int)
+                                ? match['qty'] as int
+                                : (int.tryParse(match['qty'].toString()) ?? (existingStockQty * safeQty));
+                          } else {
+                            currentPieceStock = existingStockQty * safeQty;
+                          }
+                        } else {
+                          currentPieceStock = 0;
+                        }
+
                         compsData.add({
                           'name': pName,
                           'base_qty': safeQty,
-                          'qty': safeQty,
+                          'qty': currentPieceStock,
                         });
                       }
                     }
