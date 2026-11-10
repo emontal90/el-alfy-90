@@ -22,6 +22,7 @@ class _WaitingOrdersScreenState extends State<WaitingOrdersScreen> {
   String? _filterDate;
   String _filterCustomer = '';
   String _filterCategory = '';
+  String _filterOrderType = 'all'; // 'all', 'نمطي', 'أوردر'
 
   @override
   void initState() {
@@ -53,7 +54,17 @@ class _WaitingOrdersScreenState extends State<WaitingOrdersScreen> {
           (o['customer_name'] ?? '').toString().trim() == _filterCustomer.trim();
       final matchCat = _filterCategory.isEmpty ||
           (o['category_name'] ?? '').toString().trim() == _filterCategory.trim();
-      return matchDate && matchCust && matchCat;
+
+      bool matchType = true;
+      if (_filterOrderType == 'نمطي') {
+        final t = (o['order_type'] ?? '').toString().trim();
+        matchType = (t == 'نمطي' || t == 'نمطى');
+      } else if (_filterOrderType == 'أوردر') {
+        final t = (o['order_type'] ?? '').toString().trim();
+        matchType = (t != 'نمطي' && t != 'نمطى');
+      }
+
+      return matchDate && matchCust && matchCat && matchType;
     }).toList();
   }
 
@@ -480,7 +491,22 @@ class _WaitingOrdersScreenState extends State<WaitingOrdersScreen> {
 
     final customerValue = uniqueCustomers.contains(_filterCustomer) ? _filterCustomer : '';
     final categoryValue = uniqueCategories.contains(_filterCategory) ? _filterCategory : '';
-    final bool hasFilter = _filterCustomer.isNotEmpty || _filterCategory.isNotEmpty || _filterDate != null;
+
+    int standardCount = 0;
+    int customCount = 0;
+    for (final o in _orders) {
+      final t = (o['order_type'] ?? '').toString().trim();
+      if (t == 'نمطي' || t == 'نمطى') {
+        standardCount++;
+      } else {
+        customCount++;
+      }
+    }
+
+    final bool hasFilter = _filterCustomer.isNotEmpty ||
+        _filterCategory.isNotEmpty ||
+        _filterDate != null ||
+        _filterOrderType != 'all';
 
     return Scaffold(
       appBar: AppBar(
@@ -507,6 +533,33 @@ class _WaitingOrdersScreenState extends State<WaitingOrdersScreen> {
             padding: const EdgeInsets.all(12),
             child: Column(
               children: [
+                // 1. فلتر نوع الطلب (الكل / نمطي / أوردر)
+                Row(
+                  children: [
+                    _TypeFilterChip(
+                      label: 'الكل (${_orders.length})',
+                      icon: Icons.all_inbox_rounded,
+                      isSelected: _filterOrderType == 'all',
+                      onTap: () => setState(() => _filterOrderType = 'all'),
+                    ),
+                    const SizedBox(width: 8),
+                    _TypeFilterChip(
+                      label: 'نمطي ($standardCount)',
+                      icon: Icons.style_rounded,
+                      isSelected: _filterOrderType == 'نمطي',
+                      onTap: () => setState(() => _filterOrderType = 'نمطي'),
+                    ),
+                    const SizedBox(width: 8),
+                    _TypeFilterChip(
+                      label: 'أوردر ($customCount)',
+                      icon: Icons.shopping_bag_outlined,
+                      isSelected: _filterOrderType == 'أوردر',
+                      onTap: () => setState(() => _filterOrderType = 'أوردر'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+
                 Row(
                   children: [
                     // دروب ليست فلتر اسم الزبون المسجل بقائمة الانتظار
@@ -604,6 +657,7 @@ class _WaitingOrdersScreenState extends State<WaitingOrdersScreen> {
                             _filterCustomer = '';
                             _filterCategory = '';
                             _filterDate = null;
+                            _filterOrderType = 'all';
                           });
                         },
                         icon: const Icon(Icons.filter_alt_off, size: 16),
@@ -631,6 +685,60 @@ class _WaitingOrdersScreenState extends State<WaitingOrdersScreen> {
                   ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _TypeFilterChip extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _TypeFilterChip({
+    required this.label,
+    required this.icon,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: isSelected ? AppTheme.primaryNavy : Colors.grey.shade100,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: isSelected ? AppTheme.primaryNavy : Colors.grey.shade300,
+              width: 1.2,
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 15,
+                color: isSelected ? AppTheme.royalGold : Colors.grey.shade700,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: isSelected ? Colors.white : Colors.black87,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
