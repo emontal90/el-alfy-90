@@ -103,6 +103,165 @@ class _ShowroomStockTabState extends State<ShowroomStockTab> {
   // ---------------------------------------------------------------------------
   // نافذة تعديل رصيد المخزن (مضاعفة أعداد القطع حسب نسبة كل قطعة بالطقم)
   // ---------------------------------------------------------------------------
+  /// نافذة عرض تفاصيل القطع الفردية الزائدة عند الضغط على أفاتار الرصيد الفردي
+  void _showIndividualPiecesDialog({
+    required BuildContext context,
+    required String setName,
+    required int completeSets,
+    required int totalExcess,
+    required List<Map<String, dynamic>> excessPieces,
+  }) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFD97706).withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.chair_rounded, color: Color(0xFFD97706), size: 24),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'تفاصيل الرصيد الفردي',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.primaryNavy),
+                  ),
+                  Text(
+                    'طقم: $setName (الأطقم المكتملة: $completeSets)',
+                    style: const TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.normal),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        content: totalExcess == 0
+            ? const Padding(
+                padding: EdgeInsets.symmetric(vertical: 16),
+                child: Row(
+                  children: [
+                    Icon(Icons.check_circle, color: Colors.green, size: 22),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'لا توجد قطع فردية زائدة. كافة القطع متكاملة ضمن الأطقم المكتملة.',
+                        style: TextStyle(fontSize: 14),
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            : SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFD97706).withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFFD97706).withValues(alpha: 0.2)),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'إجمالي القطع الفردية الزائدة:',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFFB45309)),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFD97706),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              '$totalExcess قطعة',
+                              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13, color: Colors.white),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'القطع الفردية الزائدة حالياً بالمخزن:',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black87),
+                    ),
+                    const SizedBox(height: 6),
+                    ...excessPieces.map((p) {
+                      return Container(
+                        margin: const EdgeInsets.symmetric(vertical: 4),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: Colors.grey.shade300),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.02),
+                              blurRadius: 4,
+                              offset: const Offset(0, 1),
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.weekend_outlined, size: 20, color: AppTheme.primaryNavy),
+                                const SizedBox(width: 8),
+                                Text(
+                                  p['name'] as String,
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppTheme.primaryNavy),
+                                ),
+                              ],
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFD97706),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                '${p['excess_qty']} قطعة زائدة',
+                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
+                  ],
+                ),
+              ),
+        actions: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.primaryNavy,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('إغلاق'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _openEditDialog(Map<String, dynamic> cat) {
     final int currentSets = (cat['stock_qty'] as int?) ?? 0;
     final stockCtrl = TextEditingController(text: '$currentSets');
@@ -771,6 +930,7 @@ class _ShowroomStockTabState extends State<ShowroomStockTab> {
                 completeSets = (cat['stock_qty'] as int?) ?? 0;
               }
 
+              final excessPieces = <Map<String, dynamic>>[];
               int individualPiecesCount = 0;
               for (final c in comps) {
                 final q = (c['qty'] is int) ? c['qty'] as int : (int.tryParse(c['qty']?.toString() ?? '0') ?? 0);
@@ -779,6 +939,12 @@ class _ShowroomStockTabState extends State<ShowroomStockTab> {
                 final excess = q - (completeSets * safeB);
                 if (excess > 0) {
                   individualPiecesCount += excess;
+                  excessPieces.add({
+                    'name': (c['name'] ?? 'قطعة').toString(),
+                    'excess_qty': excess,
+                    'total_qty': q,
+                    'base_qty': safeB,
+                  });
                 }
               }
 
@@ -837,37 +1003,62 @@ class _ShowroomStockTabState extends State<ShowroomStockTab> {
                           ),
                           const SizedBox(width: 8),
 
-                          // 2. بادج الرصيد الفردي (القطع الزائدة عن مكونات الأطقم الفعلية)
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: individualPiecesCount > 0
-                                    ? [const Color(0xFFD97706), const Color(0xFFB45309)]
-                                    : [Colors.blueGrey.shade800, Colors.blueGrey.shade700],
-                              ),
+                          // 2. بادج الرصيد الفردي (اضغط لعرض تفاصيل القطع الفردية)
+                          Material(
+                            color: Colors.transparent,
+                            child: InkWell(
                               borderRadius: BorderRadius.circular(12),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.1),
-                                  blurRadius: 4,
-                                  offset: const Offset(0, 2),
+                              onTap: () {
+                                _showIndividualPiecesDialog(
+                                  context: context,
+                                  setName: (cat['name'] ?? '').toString(),
+                                  completeSets: completeSets,
+                                  totalExcess: individualPiecesCount,
+                                  excessPieces: excessPieces,
+                                );
+                              },
+                              child: Tooltip(
+                                message: 'اضغط لعرض تفاصيل القطع الفردية الزائدة',
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      colors: individualPiecesCount > 0
+                                          ? [const Color(0xFFD97706), const Color(0xFFB45309)]
+                                          : [Colors.blueGrey.shade800, Colors.blueGrey.shade700],
+                                    ),
+                                    borderRadius: BorderRadius.circular(12),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withValues(alpha: 0.1),
+                                        blurRadius: 4,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Text(
+                                            'الرصيد الفردي',
+                                            style: TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold),
+                                          ),
+                                          SizedBox(width: 2),
+                                          Icon(Icons.touch_app, size: 10, color: Colors.white70),
+                                        ],
+                                      ),
+                                      Text(
+                                        '$individualPiecesCount',
+                                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+                                      ),
+                                      const Text('قطع زائدة', style: TextStyle(fontSize: 9, color: Colors.white70)),
+                                    ],
+                                  ),
                                 ),
-                              ],
-                            ),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Text(
-                                  'الرصيد الفردي',
-                                  style: TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold),
-                                ),
-                                Text(
-                                  '$individualPiecesCount',
-                                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
-                                ),
-                                const Text('قطع زائدة', style: TextStyle(fontSize: 9, color: Colors.white70)),
-                              ],
+                              ),
                             ),
                           ),
                           const SizedBox(width: 10),
