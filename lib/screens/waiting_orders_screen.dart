@@ -49,9 +49,9 @@ class _WaitingOrdersScreenState extends State<WaitingOrdersScreen> {
       final matchDate =
           _filterDate == null || o['delivery_date'] == _filterDate;
       final matchCust = _filterCustomer.isEmpty ||
-          o['customer_name'].toString().contains(_filterCustomer);
+          (o['customer_name'] ?? '').toString().trim() == _filterCustomer.trim();
       final matchCat = _filterCategory.isEmpty ||
-          o['category_name'].toString().contains(_filterCategory);
+          (o['category_name'] ?? '').toString().trim() == _filterCategory.trim();
       return matchDate && matchCust && matchCat;
     }).toList();
   }
@@ -338,6 +338,25 @@ class _WaitingOrdersScreenState extends State<WaitingOrdersScreen> {
   @override
   Widget build(BuildContext context) {
     final list = _filteredOrders;
+
+    final uniqueCustomers = _orders
+        .map((o) => (o['customer_name'] ?? '').toString().trim())
+        .where((name) => name.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort();
+
+    final uniqueCategories = _orders
+        .map((o) => (o['category_name'] ?? '').toString().trim())
+        .where((name) => name.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort();
+
+    final customerValue = uniqueCustomers.contains(_filterCustomer) ? _filterCustomer : '';
+    final categoryValue = uniqueCategories.contains(_filterCategory) ? _filterCategory : '';
+    final bool hasFilter = _filterCustomer.isNotEmpty || _filterCategory.isNotEmpty || _filterDate != null;
+
     return Scaffold(
       appBar: AppBar(
         title: const Row(
@@ -365,23 +384,62 @@ class _WaitingOrdersScreenState extends State<WaitingOrdersScreen> {
               children: [
                 Row(
                   children: [
+                    // دروب ليست فلتر اسم الزبون المسجل بقائمة الانتظار
                     Expanded(
-                      child: TextField(
-                        decoration: const InputDecoration(
-                            hintText: 'فلتر باسم الزبون...',
-                            prefixIcon: Icon(Icons.person_search)),
-                        onChanged: (v) =>
-                            setState(() => _filterCustomer = v.trim()),
+                      child: DropdownButtonFormField<String>(
+                        key: ValueKey("cust_$customerValue"),
+                        initialValue: customerValue,
+                        isExpanded: true,
+                        decoration: InputDecoration(
+                          labelText: 'اسم الزبون',
+                          prefixIcon: const Icon(Icons.person_pin_rounded, color: AppTheme.primaryNavy, size: 20),
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        items: [
+                          const DropdownMenuItem<String>(
+                            value: '',
+                            child: Text('جميع العملاء (الكل)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                          ),
+                          ...uniqueCustomers.map(
+                            (name) => DropdownMenuItem<String>(
+                              value: name,
+                              child: Text(name, style: const TextStyle(fontSize: 13), overflow: TextOverflow.ellipsis),
+                            ),
+                          ),
+                        ],
+                        onChanged: (v) => setState(() => _filterCustomer = v ?? ''),
                       ),
                     ),
                     const SizedBox(width: 8),
+
+                    // دروب ليست فلتر اسم الطقم المسجل بقائمة الانتظار
                     Expanded(
-                      child: TextField(
-                        decoration: const InputDecoration(
-                            hintText: 'فلتر باسم الطقم...',
-                            prefixIcon: Icon(Icons.search)),
-                        onChanged: (v) =>
-                            setState(() => _filterCategory = v.trim()),
+                      child: DropdownButtonFormField<String>(
+                        key: ValueKey("cat_$categoryValue"),
+                        initialValue: categoryValue,
+                        isExpanded: true,
+                        decoration: InputDecoration(
+                          labelText: 'اسم الطقم',
+                          prefixIcon: const Icon(Icons.weekend_rounded, color: AppTheme.primaryNavy, size: 20),
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        items: [
+                          const DropdownMenuItem<String>(
+                            value: '',
+                            child: Text('جميع الأطقم (الكل)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                          ),
+                          ...uniqueCategories.map(
+                            (cat) => DropdownMenuItem<String>(
+                              value: cat,
+                              child: Text(cat, style: const TextStyle(fontSize: 13), overflow: TextOverflow.ellipsis),
+                            ),
+                          ),
+                        ],
+                        onChanged: (v) => setState(() => _filterCategory = v ?? ''),
                       ),
                     ),
                   ],
@@ -391,7 +449,7 @@ class _WaitingOrdersScreenState extends State<WaitingOrdersScreen> {
                   children: [
                     Expanded(
                       child: OutlinedButton.icon(
-                        icon: const Icon(Icons.calendar_today),
+                        icon: const Icon(Icons.calendar_today, size: 16),
                         label: Text(_filterDate == null
                             ? 'فلتر بتاريخ التسليم (الكل)'
                             : 'أوردرات يوم: $_filterDate'),
@@ -409,12 +467,24 @@ class _WaitingOrdersScreenState extends State<WaitingOrdersScreen> {
                         },
                       ),
                     ),
-                    if (_filterDate != null)
-                      IconButton(
-                        tooltip: 'إلغاء فلتر التاريخ',
-                        icon: const Icon(Icons.clear, color: Colors.red),
-                        onPressed: () => setState(() => _filterDate = null),
+                    if (hasFilter) ...[
+                      const SizedBox(width: 8),
+                      TextButton.icon(
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.red.shade700,
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            _filterCustomer = '';
+                            _filterCategory = '';
+                            _filterDate = null;
+                          });
+                        },
+                        icon: const Icon(Icons.filter_alt_off, size: 16),
+                        label: const Text('مسح الفلاتر', style: TextStyle(fontSize: 12)),
                       ),
+                    ],
                   ],
                 ),
               ],

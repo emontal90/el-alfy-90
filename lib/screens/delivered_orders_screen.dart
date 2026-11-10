@@ -18,9 +18,10 @@ class _DeliveredOrdersScreenState extends State<DeliveredOrdersScreen> {
   String _searchQuery = '';
   final TextEditingController _searchCtrl = TextEditingController();
 
-  // فلاتر تاريخ التسليم
-  String _dateFilterType = 'all'; // 'all', 'today', 'this_week', 'this_month', 'custom'
-  DateTime? _customSelectedDate;
+  // فلاتر تاريخ التسليم: الكل، اليوم، أو فترة مخصصة (من - إلى)
+  String _dateFilterType = 'all'; // 'all', 'today', 'range'
+  DateTime? _startDate;
+  DateTime? _endDate;
 
   @override
   void initState() {
@@ -42,7 +43,7 @@ class _DeliveredOrdersScreenState extends State<DeliveredOrdersScreen> {
     if (mounted) setState(() => _orders = data);
   }
 
-  /// تصفية الأوردرات المسلّمة حسب تاريخ التسليم والبحث
+  /// تصفية الأوردرات المسلّمة حسب فترة التاريخ والبحث
   List<Map<String, dynamic>> get _filteredOrders {
     final now = DateTime.now();
     final todayStr = intl.DateFormat('yyyy-MM-dd').format(now);
@@ -50,7 +51,7 @@ class _DeliveredOrdersScreenState extends State<DeliveredOrdersScreen> {
     return _orders.where((o) {
       final custName = (o['customer_name'] ?? '').toString().toLowerCase();
       final catName = (o['category_name'] ?? '').toString().toLowerCase();
-      final deliveryDateStr = (o['delivery_date'] ?? '').toString();
+      final deliveryDateStr = (o['delivery_date'] ?? '').toString().trim();
 
       // فلتر البحث بالاسم أو الصنف
       if (_searchQuery.trim().isNotEmpty) {
@@ -63,37 +64,110 @@ class _DeliveredOrdersScreenState extends State<DeliveredOrdersScreen> {
       // فلتر تاريخ التسليم
       if (_dateFilterType == 'today') {
         if (deliveryDateStr != todayStr) return false;
-      } else if (_dateFilterType == 'this_week') {
-        try {
-          final delivDate = DateTime.parse(deliveryDateStr);
-          final diffDays = now.difference(delivDate).inDays;
-          if (diffDays < 0 || diffDays > 7) return false;
-        } catch (_) {
-          return false;
+      } else if (_dateFilterType == 'range') {
+        if (_startDate != null || _endDate != null) {
+          DateTime? dDate = DateTime.tryParse(deliveryDateStr);
+          if (dDate != null) {
+            final dOnly = DateTime(dDate.year, dDate.month, dDate.day);
+            if (_startDate != null) {
+              final sOnly = DateTime(_startDate!.year, _startDate!.month, _startDate!.day);
+              if (dOnly.isBefore(sOnly)) return false;
+            }
+            if (_endDate != null) {
+              final eOnly = DateTime(_endDate!.year, _endDate!.month, _endDate!.day);
+              if (dOnly.isAfter(eOnly)) return false;
+            }
+          } else {
+            final dStr = deliveryDateStr.length >= 10 ? deliveryDateStr.substring(0, 10) : deliveryDateStr;
+            if (_startDate != null) {
+              final sStr = intl.DateFormat('yyyy-MM-dd').format(_startDate!);
+              if (dStr.compareTo(sStr) < 0) return false;
+            }
+            if (_endDate != null) {
+              final eStr = intl.DateFormat('yyyy-MM-dd').format(_endDate!);
+              if (dStr.compareTo(eStr) > 0) return false;
+            }
+          }
         }
-      } else if (_dateFilterType == 'this_month') {
-        final thisMonthPrefix = intl.DateFormat('yyyy-MM').format(now);
-        if (!deliveryDateStr.startsWith(thisMonthPrefix)) return false;
-      } else if (_dateFilterType == 'custom' && _customSelectedDate != null) {
-        final customStr = intl.DateFormat('yyyy-MM-dd').format(_customSelectedDate!);
-        if (deliveryDateStr != customStr) return false;
       }
 
       return true;
     }).toList();
   }
 
-  Future<void> _pickCustomDate() async {
-    final picked = await showDatePicker(
+  Future<void> _pickDateRange() async {
+    final now = DateTime.now();
+    final initialRange = (_startDate != null && _endDate != null)
+        ? DateTimeRange(start: _startDate!, end: _endDate!)
+        : DateTimeRange(
+            start: now.subtract(const Duration(days: 7)),
+            end: now,
+          );
+
+    final picked = await showDateRangePicker(
       context: context,
-      initialDate: _customSelectedDate ?? DateTime.now(),
       firstDate: DateTime(2020),
       lastDate: DateTime(2035),
+      initialDateRange: initialRange,
+      helpText: 'اختر فترة التسليم (من - إلى)',
+      cancelText: 'إلغاء',
+      confirmText: 'تطبيق الفلتر',
+      saveText: 'تطبيق',
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: AppTheme.primaryNavy,
+              onPrimary: AppTheme.royalGold,
+              surface: Colors.white,
+              onSurface: AppTheme.primaryNavy,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null) {
+      setState(() {
+        _startDate = picked.start;
+        _endDate = picked.end;
+        _dateFilterType = 'range';
+      });
+    }
+  }
+
+  Future<void> _pickSingleStartDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _startDate ?? DateTime.now(),
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2035),
+      helpText: 'اختر تاريخ البداية (من)',
     );
     if (picked != null) {
       setState(() {
-        _customSelectedDate = picked;
-        _dateFilterType = 'custom';
+        _startDate = picked;
+        _dateFilterType = 'range';
+        if (_endDate != null && _endDate!.isBefore(picked)) {
+          _endDate = picked;
+        }
+      });
+    }
+  }
+
+  Future<void> _pickSingleEndDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _endDate ?? (_startDate ?? DateTime.now()),
+      firstDate: _startDate ?? DateTime(2020),
+      lastDate: DateTime(2035),
+      helpText: 'اختر تاريخ النهاية (إلى)',
+    );
+    if (picked != null) {
+      setState(() {
+        _endDate = picked;
+        _dateFilterType = 'range';
       });
     }
   }
@@ -102,6 +176,15 @@ class _DeliveredOrdersScreenState extends State<DeliveredOrdersScreen> {
   Widget build(BuildContext context) {
     final list = _filteredOrders;
     final bool hasActiveFilter = _dateFilterType != 'all' || _searchQuery.trim().isNotEmpty;
+
+    String rangeLabel = 'فترة محددة (من - إلى) 📅';
+    if (_startDate != null && _endDate != null) {
+      rangeLabel = 'من: ${intl.DateFormat('yyyy-MM-dd').format(_startDate!)}  إلى: ${intl.DateFormat('yyyy-MM-dd').format(_endDate!)}';
+    } else if (_startDate != null) {
+      rangeLabel = 'من: ${intl.DateFormat('yyyy-MM-dd').format(_startDate!)}';
+    } else if (_endDate != null) {
+      rangeLabel = 'حتى: ${intl.DateFormat('yyyy-MM-dd').format(_endDate!)}';
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -164,7 +247,7 @@ class _DeliveredOrdersScreenState extends State<DeliveredOrdersScreen> {
                 ),
                 const SizedBox(height: 8),
 
-                // أزرار فلاتر تاريخ التسليم
+                // أزرار فلاتر تاريخ التسليم: الكل، اليوم، والفترة (من - إلى)
                 SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: Row(
@@ -173,37 +256,33 @@ class _DeliveredOrdersScreenState extends State<DeliveredOrdersScreen> {
                         label: 'الكل (${_orders.length})',
                         icon: Icons.list_alt,
                         isSelected: _dateFilterType == 'all',
-                        onTap: () => setState(() => _dateFilterType = 'all'),
+                        onTap: () {
+                          setState(() {
+                            _dateFilterType = 'all';
+                            _startDate = null;
+                            _endDate = null;
+                          });
+                        },
                       ),
                       const SizedBox(width: 6),
                       _DateFilterChip(
                         label: 'تسليم اليوم',
                         icon: Icons.today,
                         isSelected: _dateFilterType == 'today',
-                        onTap: () => setState(() => _dateFilterType = 'today'),
+                        onTap: () {
+                          setState(() {
+                            _dateFilterType = 'today';
+                            _startDate = null;
+                            _endDate = null;
+                          });
+                        },
                       ),
                       const SizedBox(width: 6),
                       _DateFilterChip(
-                        label: 'آخر أسبوع',
-                        icon: Icons.date_range,
-                        isSelected: _dateFilterType == 'this_week',
-                        onTap: () => setState(() => _dateFilterType = 'this_week'),
-                      ),
-                      const SizedBox(width: 6),
-                      _DateFilterChip(
-                        label: 'هذا الشهر',
-                        icon: Icons.calendar_month,
-                        isSelected: _dateFilterType == 'this_month',
-                        onTap: () => setState(() => _dateFilterType = 'this_month'),
-                      ),
-                      const SizedBox(width: 6),
-                      _DateFilterChip(
-                        label: _customSelectedDate != null && _dateFilterType == 'custom'
-                            ? intl.DateFormat('yyyy-MM-dd').format(_customSelectedDate!)
-                            : 'تاريخ محدد 📅',
-                        icon: Icons.event,
-                        isSelected: _dateFilterType == 'custom',
-                        onTap: _pickCustomDate,
+                        label: rangeLabel,
+                        icon: Icons.date_range_rounded,
+                        isSelected: _dateFilterType == 'range',
+                        onTap: _pickDateRange,
                       ),
                       if (hasActiveFilter) ...[
                         const SizedBox(width: 8),
@@ -217,7 +296,8 @@ class _DeliveredOrdersScreenState extends State<DeliveredOrdersScreen> {
                               _searchCtrl.clear();
                               _searchQuery = '';
                               _dateFilterType = 'all';
-                              _customSelectedDate = null;
+                              _startDate = null;
+                              _endDate = null;
                             });
                           },
                           icon: const Icon(Icons.filter_alt_off, size: 16),
@@ -227,6 +307,73 @@ class _DeliveredOrdersScreenState extends State<DeliveredOrdersScreen> {
                     ],
                   ),
                 ),
+
+                // شريط أزرار تحديد تاريخ "من" و "إلى" إذا كان فلتر الفترة نشطاً
+                if (_dateFilterType == 'range') ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primaryNavy.withValues(alpha: 0.04),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppTheme.primaryNavy.withValues(alpha: 0.15)),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: InkWell(
+                            onTap: _pickSingleStartDate,
+                            borderRadius: BorderRadius.circular(6),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 6),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.calendar_today, size: 14, color: AppTheme.primaryNavy),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    _startDate != null
+                                        ? 'من: ${intl.DateFormat('yyyy-MM-dd').format(_startDate!)}'
+                                        : 'من: حدد تاريخ',
+                                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.primaryNavy),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        Container(width: 1, height: 20, color: Colors.grey.shade300),
+                        Expanded(
+                          child: InkWell(
+                            onTap: _pickSingleEndDate,
+                            borderRadius: BorderRadius.circular(6),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 6),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.event_available, size: 14, color: AppTheme.primaryNavy),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    _endDate != null
+                                        ? 'إلى: ${intl.DateFormat('yyyy-MM-dd').format(_endDate!)}'
+                                        : 'إلى: حدد تاريخ',
+                                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.primaryNavy),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: 'تغيير نطاق الفترة',
+                          icon: const Icon(Icons.edit_calendar, size: 18, color: AppTheme.primaryNavy),
+                          onPressed: _pickDateRange,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
