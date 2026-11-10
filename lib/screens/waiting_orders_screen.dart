@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart' as intl;
@@ -369,22 +370,81 @@ class _WaitingOrdersScreenState extends State<WaitingOrdersScreen> {
                 foregroundColor: Colors.white),
             onPressed: () async {
               final db = await DBHelper.instance.database;
+
+              // 1. جلب مكونات الطلب المطلوب تسليمه ومكونات المخزن الحالية للصنف
+              List orderComps = [];
+              try {
+                orderComps = jsonDecode(order['selected_components_json'] ?? '[]');
+              } catch (_) {}
+
+              final catRows = await db.query('categories', where: 'id = ?', whereArgs: [order['category_id']]);
+              int newCalculatedSets = 0;
+              List validCatComps = [];
+
+              if (catRows.isNotEmpty) {
+                final catRow = catRows.first;
+                try {
+                  validCatComps = jsonDecode((catRow['components_json'] ?? '[]').toString());
+                } catch (_) {}
+
+                if (orderComps.isNotEmpty) {
+                  // خصم القطع المحددة في هذا الأوردر بالتحديد من رصيد مكونات المخزن
+                  for (final oc in orderComps) {
+                    final String oName = (oc['name'] ?? '').toString().trim();
+                    final int oQty = (oc['qty'] is int)
+                        ? oc['qty'] as int
+                        : (int.tryParse(oc['qty']?.toString() ?? '1') ?? 1);
+
+                    for (final cc in validCatComps) {
+                      if ((cc['name'] ?? '').toString().trim() == oName) {
+                        final int currentQ = (cc['qty'] as int?) ?? 0;
+                        cc['qty'] = (currentQ - oQty) >= 0 ? (currentQ - oQty) : 0;
+                        break;
+                      }
+                    }
+                  }
+                } else {
+                  // إذا لم تكن القطع مسرودة، خصم طقم كامل بنسبه التأسيسية
+                  for (final cc in validCatComps) {
+                    final int bQty = (cc['base_qty'] as int?) ?? 1;
+                    final int currentQ = (cc['qty'] as int?) ?? 0;
+                    cc['qty'] = (currentQ - bQty) >= 0 ? (currentQ - bQty) : 0;
+                  }
+                }
+
+                // حساب الأطقم الكاملة المتبقية بعد الخصم
+                if (validCatComps.isNotEmpty) {
+                  newCalculatedSets = validCatComps.map<int>((c) {
+                    final q = (c['qty'] is int) ? c['qty'] as int : (int.tryParse(c['qty']?.toString() ?? '0') ?? 0);
+                    final b = (c['base_qty'] is int) ? c['base_qty'] as int : (int.tryParse(c['base_qty']?.toString() ?? '1') ?? 1);
+                    return q ~/ (b > 0 ? b : 1);
+                  }).reduce(math.min);
+                }
+              }
+
               await db.transaction((txn) async {
                 await txn.update('orders', {'status': 'delivered'},
                     where: 'id = ?', whereArgs: [order['id']]);
-                await txn.rawUpdate(
-                    'UPDATE categories SET stock_qty = stock_qty - 1 WHERE id = ?',
-                    [order['category_id']]);
+                if (catRows.isNotEmpty) {
+                  await txn.update(
+                    'categories',
+                    {
+                      'stock_qty': newCalculatedSets,
+                      'components_json': jsonEncode(validCatComps),
+                    },
+                    where: 'id = ?',
+                    whereArgs: [order['category_id']],
+                  );
+                }
               });
-              final catRows = await db.query('categories', where: 'id = ?', whereArgs: [order['category_id']]);
-              final currentStock = catRows.isNotEmpty ? (catRows.first['stock_qty'] as int) : 0;
+
               await StockMovementHelper.logMovement(
                 categoryId: order['category_id'],
                 categoryName: order['category_name'],
                 movementType: 'delivered_out',
                 qtyChange: -1,
-                stockAfter: currentStock,
-                notes: 'تسليم أوردر للعميل: ${order['customer_name']}',
+                stockAfter: newCalculatedSets,
+                notes: 'تسليم أوردر للعميل: ${order['customer_name']} (أصبح رصيد الأطقم بالمخزن $newCalculatedSets)',
               );
               AppEvents.instance.notifyAll();
               if (mounted) {
