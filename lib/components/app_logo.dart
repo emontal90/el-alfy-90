@@ -17,11 +17,11 @@ class AppLogo extends StatelessWidget {
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: AppTheme.primaryNavy,
+        color: const Color(0xFFFBF9F4),
         borderRadius: BorderRadius.circular(size * 0.22),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.18),
+            color: Colors.black.withValues(alpha: 0.14),
             blurRadius: size * 0.1,
             offset: Offset(0, size * 0.04),
           ),
@@ -40,7 +40,7 @@ class AppLogo extends StatelessWidget {
           errorBuilder: (context, error, stackTrace) => Icon(
             Icons.chair_rounded,
             size: size * 0.6,
-            color: AppTheme.royalGold,
+            color: AppTheme.primaryNavy,
           ),
         ),
       ),
