@@ -83,6 +83,132 @@ class _CustomersTabState extends State<CustomersTab> {
     }
   }
 
+  void _openEditCustomerDialog(Map<String, dynamic> c) {
+    _nameCtrl.text = (c['name'] ?? '').toString();
+    _phoneCtrl.text = (c['phone'] ?? '').toString();
+    _addressCtrl.text = (c['address'] ?? '').toString();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+          left: 20,
+          right: 20,
+          top: 24,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Row(
+                  children: [
+                    Icon(Icons.edit_note_rounded, color: AppTheme.primaryNavy, size: 26),
+                    SizedBox(width: 8),
+                    Text(
+                      'تعديل بيانات العميل',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.primaryNavy),
+                    ),
+                  ],
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.pop(ctx),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _nameCtrl,
+              autofocus: true,
+              decoration: const InputDecoration(
+                labelText: 'اسم العميل *',
+                hintText: 'أدخل اسم العميل (إجباري)',
+                prefixIcon: Icon(Icons.person),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _phoneCtrl,
+              keyboardType: TextInputType.phone,
+              decoration: const InputDecoration(
+                labelText: 'رقم الهاتف (اختياري)',
+                hintText: 'رقم التليفون أو المحمول',
+                prefixIcon: Icon(Icons.phone),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _addressCtrl,
+              decoration: const InputDecoration(
+                labelText: 'العنوان (اختياري)',
+                hintText: 'عنوان العميل أو المنطقة',
+                prefixIcon: Icon(Icons.location_on),
+              ),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primaryNavy,
+                foregroundColor: AppTheme.royalGold,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              onPressed: () async {
+                final name = _nameCtrl.text.trim();
+                if (name.isEmpty) {
+                  AppNotification.showError(ctx, 'يرجى إدخال اسم العميل أولاً');
+                  return;
+                }
+                final phone = _phoneCtrl.text.trim().isEmpty ? null : _phoneCtrl.text.trim();
+                final address = _addressCtrl.text.trim().isEmpty ? null : _addressCtrl.text.trim();
+
+                final db = await DBHelper.instance.database;
+                await db.update(
+                  'customers',
+                  {
+                    'name': name,
+                    'phone': phone,
+                    'address': address,
+                  },
+                  where: 'id = ?',
+                  whereArgs: [c['id']],
+                );
+
+                // تحديث اسم العميل في جدول الطلبات المرتبطة به
+                await db.update(
+                  'orders',
+                  {'customer_name': name},
+                  where: 'customer_id = ?',
+                  whereArgs: [c['id']],
+                );
+
+                _nameCtrl.clear();
+                _phoneCtrl.clear();
+                _addressCtrl.clear();
+
+                AppEvents.instance.notifyAll();
+                if (mounted) {
+                  Navigator.pop(ctx);
+                  AppNotification.showSuccess(context, 'تم تعديل بيانات العميل بنجاح');
+                }
+              },
+              icon: const Icon(Icons.save_rounded),
+              label: const Text('حفظ التعديلات', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _openAddCustomerDialog() {
     _nameCtrl.clear();
     _phoneCtrl.clear();
@@ -206,10 +332,20 @@ class _CustomersTabState extends State<CustomersTab> {
                     ),
                     title: Text(c['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
                     subtitle: Text('هاتف: $phone | عنوان: $address'),
-                    trailing: IconButton(
-                      icon: Icon(Icons.delete_outline, color: Colors.red.shade400, size: 22),
-                      tooltip: 'حذف العميل',
-                      onPressed: () => _confirmDeleteCustomer(context, c),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.edit_note_rounded, color: AppTheme.primaryNavy, size: 24),
+                          tooltip: 'تعديل بيانات العميل',
+                          onPressed: () => _openEditCustomerDialog(c),
+                        ),
+                        IconButton(
+                          icon: Icon(Icons.delete_outline, color: Colors.red.shade400, size: 22),
+                          tooltip: 'حذف العميل',
+                          onPressed: () => _confirmDeleteCustomer(context, c),
+                        ),
+                      ],
                     ),
                   ),
                 );

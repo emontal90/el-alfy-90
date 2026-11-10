@@ -649,25 +649,35 @@ class _UpholstererScreenState extends State<UpholstererScreen> {
   // ---------------------------------------------------------------------------
   // 2. نافذة الاستلام الذكية (Receive Modal)
   // ---------------------------------------------------------------------------
-  void _openReceiveModal(Map<String, dynamic> batch) {
+  void _openReceiveModal(Map<String, dynamic> initialBatch) {
+    final Map<String, dynamic> batch = Map<String, dynamic>.from(initialBatch);
     List<Map<String, dynamic>> pieces = _parseBatchPieces(batch);
-    final int setsSent = (batch['sets_sent'] as int?) ?? 1;
-    final int initialSetsRec = (batch['sets_received'] as int?) ?? 0;
-    final int initialSetsRem = (setsSent - initialSetsRec) > 0 ? (setsSent - initialSetsRec) : 0;
+    int setsToReceive = 1;
 
-    int initialMaxSetsByPieces = pieces.isEmpty
-        ? 0
-        : pieces.map((p) {
-            final int pSent = (p['sent_qty'] as int?) ?? 1;
-            final int pRec = (p['received_qty'] as int?) ?? 0;
-            final int pRem = pSent - pRec;
-            final int bq = (p['base_qty'] as int?) ?? 1;
-            return pRem ~/ (bq > 0 ? bq : 1);
-          }).reduce(math.min);
+    void updateSetsToReceiveCount() {
+      final currentSetsSent = (batch['sets_sent'] as int?) ?? 1;
+      final currentSetsRec = (batch['sets_received'] as int?) ?? 0;
+      final currentSetsRem = (currentSetsSent - currentSetsRec) > 0 ? (currentSetsSent - currentSetsRec) : 0;
 
-    int initialMaxAllowed = math.min(initialSetsRem, initialMaxSetsByPieces);
-    if (initialMaxAllowed < 0) initialMaxAllowed = 0;
-    int setsToReceive = initialMaxAllowed > 0 ? 1 : 0;
+      final maxSetsByPieces = pieces.isEmpty
+          ? 0
+          : pieces.map((p) {
+              final int pSent = (p['sent_qty'] as int?) ?? 1;
+              final int pRec = (p['received_qty'] as int?) ?? 0;
+              final int pRem = pSent - pRec;
+              final int bq = (p['base_qty'] as int?) ?? 1;
+              return pRem ~/ (bq > 0 ? bq : 1);
+            }).reduce(math.min);
+
+      final maxAllowedSets = math.min(currentSetsRem, maxSetsByPieces < 0 ? 0 : maxSetsByPieces);
+      if (maxAllowedSets <= 0) {
+        setsToReceive = 0;
+      } else if (setsToReceive > maxAllowedSets || setsToReceive <= 0) {
+        setsToReceive = 1;
+      }
+    }
+
+    updateSetsToReceiveCount();
 
     showModalBottomSheet(
       context: context,
@@ -844,6 +854,7 @@ class _UpholstererScreenState extends State<UpholstererScreen> {
                                             setsCount: setsToReceive,
                                             modalCtx: ctx,
                                             setModalState: setModalState,
+                                            onStateReset: updateSetsToReceiveCount,
                                           )
                                       : null,
                                   icon: const Icon(Icons.check_circle_rounded),
@@ -930,6 +941,7 @@ class _UpholstererScreenState extends State<UpholstererScreen> {
                     final pRecDate = p['received_date'];
 
                     return _PieceReceiveItemWidget(
+                      key: ValueKey('${batch['id']}_${pName}_${pRec}_${pRem}_${interactiveRem}_$setsToReceive'),
                       pieceName: pName,
                       baseQty: baseQty > 0 ? baseQty : 1,
                       sentQty: pSent,
@@ -947,6 +959,7 @@ class _UpholstererScreenState extends State<UpholstererScreen> {
                         qtyToReceive: qtyToReceive,
                         modalCtx: ctx,
                         setModalState: setModalState,
+                        onStateReset: updateSetsToReceiveCount,
                       ),
                     );
                   }),
@@ -967,6 +980,7 @@ class _UpholstererScreenState extends State<UpholstererScreen> {
     required int setsCount,
     required BuildContext modalCtx,
     required StateSetter setModalState,
+    required VoidCallback onStateReset,
   }) async {
     final bool? confirm = await showDialog<bool>(
       context: context,
@@ -1090,12 +1104,24 @@ class _UpholstererScreenState extends State<UpholstererScreen> {
 
     AppEvents.instance.notifyAll();
 
-    batch['sets_received'] = newSetsRec;
-    batch['received_qty'] = newBatchRec;
-    batch['pieces_json'] = jsonEncode(pieces);
+    // جلب أحدث بيانات محدثة للدفعة من قاعدة البيانات لعكسها لحظياً في النافذة
+    final updatedRows = await db.query('upholsterer_batches', where: 'id = ?', whereArgs: [batch['id']]);
+    if (updatedRows.isNotEmpty) {
+      final fresh = updatedRows.first;
+      batch.clear();
+      batch.addAll(fresh);
+      pieces.clear();
+      pieces.addAll(_parseBatchPieces(fresh));
+    } else {
+      batch['sets_received'] = newSetsRec;
+      batch['received_qty'] = newBatchRec;
+      batch['pieces_json'] = jsonEncode(pieces);
+    }
 
     final int totalSetsSent = (batch['sets_sent'] as int?) ?? 1;
-    final bool allDone = (newBatchRec >= newBatchSent) || (newSetsRec >= totalSetsSent);
+    final int freshBatchRec = (batch['received_qty'] as int?) ?? newBatchRec;
+    final int freshSetsRec = (batch['sets_received'] as int?) ?? newSetsRec;
+    final bool allDone = (freshBatchRec >= newBatchSent) || (freshSetsRec >= totalSetsSent);
 
     if (allDone) {
       if (modalCtx.mounted) {
@@ -1108,11 +1134,12 @@ class _UpholstererScreenState extends State<UpholstererScreen> {
         );
       }
     } else {
+      onStateReset();
       setModalState(() {});
       if (mounted) {
         AppNotification.showSuccess(
           context,
-          'تم استلام عدد ($setsCount) طقم وإضافتها لرصيد المخزن بنجاح',
+          'تم استلام عدد ($setsCount) طقم وتحديث البيانات ورصيد المخزن فوراً بنجاح',
         );
       }
     }
@@ -1126,6 +1153,7 @@ class _UpholstererScreenState extends State<UpholstererScreen> {
     required int qtyToReceive,
     required BuildContext modalCtx,
     required StateSetter setModalState,
+    required VoidCallback onStateReset,
   }) async {
     final p = pieces[pieceIndex];
     final pName = (p['name'] ?? 'القطعة').toString();
@@ -1266,12 +1294,24 @@ class _UpholstererScreenState extends State<UpholstererScreen> {
 
     AppEvents.instance.notifyAll();
 
-    batch['sets_received'] = currentSetsRec;
-    batch['received_qty'] = newBatchRec;
-    batch['pieces_json'] = jsonEncode(pieces);
+    // جلب أحدث بيانات محدثة للدفعة من قاعدة البيانات لعكسها لحظياً في النافذة
+    final updatedRows = await db.query('upholsterer_batches', where: 'id = ?', whereArgs: [batch['id']]);
+    if (updatedRows.isNotEmpty) {
+      final fresh = updatedRows.first;
+      batch.clear();
+      batch.addAll(fresh);
+      pieces.clear();
+      pieces.addAll(_parseBatchPieces(fresh));
+    } else {
+      batch['sets_received'] = currentSetsRec;
+      batch['received_qty'] = newBatchRec;
+      batch['pieces_json'] = jsonEncode(pieces);
+    }
 
     final int totalSetsSent = (batch['sets_sent'] as int?) ?? 1;
-    final bool allDone = (newBatchRec >= newBatchSent) || (currentSetsRec >= totalSetsSent);
+    final int freshBatchRec = (batch['received_qty'] as int?) ?? newBatchRec;
+    final int freshSetsRec = (batch['sets_received'] as int?) ?? currentSetsRec;
+    final bool allDone = (freshBatchRec >= newBatchSent) || (freshSetsRec >= totalSetsSent);
 
     if (allDone) {
       if (modalCtx.mounted) {
@@ -1284,11 +1324,12 @@ class _UpholstererScreenState extends State<UpholstererScreen> {
         );
       }
     } else {
+      onStateReset();
       setModalState(() {});
       if (mounted) {
         AppNotification.showSuccess(
           context,
-          'تم استلام عدد ($qtyToReceive) من "$pName" وإضافتها لرصيد المخزن بنجاح',
+          'تم استلام عدد ($qtyToReceive) من "$pName" وتحديث البيانات فوراً بنجاح',
         );
       }
     }
@@ -1628,30 +1669,53 @@ class _UpholstererScreenState extends State<UpholstererScreen> {
                                   ),
                                   const SizedBox(height: 12),
 
-                                  // تفاصيل القطع
+                                  // تفاصيل القطع والتواريخ بتنسيق احترافي ومميز بصرياً
                                   Container(
-                                    padding: const EdgeInsets.all(10),
+                                    padding: const EdgeInsets.all(12),
                                     decoration: BoxDecoration(
-                                      color: Colors.grey.shade50,
-                                      borderRadius: BorderRadius.circular(10),
-                                      border: Border.all(color: Colors.grey.shade200),
+                                      color: const Color(0xFFF8FAFC),
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(color: Colors.blueGrey.shade100),
                                     ),
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        const Row(
+                                        Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                           children: [
-                                            Icon(Icons.format_list_bulleted, size: 16, color: AppTheme.primaryNavy),
-                                            SizedBox(width: 6),
-                                            Text(
-                                              'تفاصيل القطع والتواريخ:',
-                                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppTheme.primaryNavy),
+                                            const Row(
+                                              children: [
+                                                Icon(Icons.inventory_2_outlined, size: 17, color: AppTheme.primaryNavy),
+                                                SizedBox(width: 6),
+                                                Text(
+                                                  'تفاصيل القطع وتواريخ الإرسال والاستلام:',
+                                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppTheme.primaryNavy),
+                                                ),
+                                              ],
+                                            ),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                              decoration: BoxDecoration(
+                                                color: isDone ? Colors.green.shade50 : Colors.amber.shade50,
+                                                borderRadius: BorderRadius.circular(8),
+                                                border: Border.all(
+                                                  color: isDone ? Colors.green.shade300 : Colors.amber.shade300,
+                                                ),
+                                              ),
+                                              child: Text(
+                                                isDone ? 'مكتمل الاستلام' : 'المتبقي: ${sent - rec} قطعة',
+                                                style: TextStyle(
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: isDone ? Colors.green.shade800 : Colors.amber.shade900,
+                                                ),
+                                              ),
                                             ),
                                           ],
                                         ),
-                                        const SizedBox(height: 6),
+                                        const SizedBox(height: 10),
                                         ...pieces.map((p) {
-                                          final pName = p['name'] ?? 'قطعة';
+                                          final pName = (p['name'] ?? 'قطعة').toString();
                                           final int pSent = (p['sent_qty'] as int?) ?? 1;
                                           final int pRec = (p['received_qty'] as int?) ?? 0;
                                           final pSentDate = p['sent_date'] ?? b['sent_date'];
@@ -1660,59 +1724,224 @@ class _UpholstererScreenState extends State<UpholstererScreen> {
 
                                           final formattedSentDate = pSentDate != null
                                               ? StockMovementHelper.formatDateString12(pSentDate.toString())
-                                              : '';
+                                              : 'غير محدد';
                                           final formattedRecDate = pRecDate != null && pRecDate.toString().isNotEmpty
                                               ? StockMovementHelper.formatDateString12(pRecDate.toString())
                                               : '';
 
-                                          return Padding(
-                                            padding: const EdgeInsets.symmetric(vertical: 4),
-                                            child: Row(
+                                          final sentBlock = Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFFF1F5F9),
+                                              borderRadius: BorderRadius.circular(8),
+                                              border: Border.all(color: const Color(0xFFCBD5E1)),
+                                            ),
+                                            child: Column(
                                               crossAxisAlignment: CrossAxisAlignment.start,
                                               children: [
-                                                Icon(
-                                                  pieceDone ? Icons.check_circle : Icons.arrow_right,
-                                                  size: 18,
-                                                  color: pieceDone ? Colors.green : AppTheme.royalGold,
+                                                Row(
+                                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                  children: [
+                                                    const Row(
+                                                      children: [
+                                                        Icon(Icons.outbox_rounded, size: 15, color: Color(0xFF1E3A8A)),
+                                                        SizedBox(width: 4),
+                                                        Text(
+                                                          'المسلّم للمنجد:',
+                                                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF1E3A8A)),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                    Container(
+                                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                      decoration: BoxDecoration(
+                                                        color: const Color(0xFF1E3A8A),
+                                                        borderRadius: BorderRadius.circular(6),
+                                                      ),
+                                                      child: Text(
+                                                        '$pSent قطعة',
+                                                        style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                                                      ),
+                                                    ),
+                                                  ],
                                                 ),
-                                                const SizedBox(width: 4),
-                                                Expanded(
-                                                  child: Column(
-                                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                                    children: [
-                                                      Row(
-                                                        children: [
-                                                          Text(
-                                                            pName,
-                                                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                                                          ),
-                                                          const SizedBox(width: 8),
-                                                          Text(
-                                                            '(سُلّم: $pSent | استُلم: $pRec)',
-                                                            style: TextStyle(
-                                                              fontSize: 12,
-                                                              color: pieceDone ? Colors.green.shade700 : Colors.black87,
-                                                              fontWeight: FontWeight.w600,
-                                                            ),
-                                                          ),
-                                                        ],
+                                                const SizedBox(height: 5),
+                                                Row(
+                                                  children: [
+                                                    const Icon(Icons.calendar_month_rounded, size: 12, color: Colors.blueGrey),
+                                                    const SizedBox(width: 4),
+                                                    Expanded(
+                                                      child: Text(
+                                                        'تاريخ الإرسال: $formattedSentDate',
+                                                        style: TextStyle(fontSize: 11, color: Colors.blueGrey.shade800, fontWeight: FontWeight.w500),
+                                                        overflow: TextOverflow.ellipsis,
                                                       ),
-                                                      Wrap(
-                                                        spacing: 10,
-                                                        children: [
-                                                          Text(
-                                                            '📅 تاريخ التسليم: $formattedSentDate',
-                                                            style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ],
+                                            ),
+                                          );
+
+                                          final recBlock = Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                            decoration: BoxDecoration(
+                                              color: pRec > 0 ? const Color(0xFFF0FDF4) : const Color(0xFFF8FAFC),
+                                              borderRadius: BorderRadius.circular(8),
+                                              border: Border.all(
+                                                color: pRec > 0 ? const Color(0xFF86EFAC) : const Color(0xFFE2E8F0),
+                                              ),
+                                            ),
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Row(
+                                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                  children: [
+                                                    Row(
+                                                      children: [
+                                                        Icon(
+                                                          Icons.move_to_inbox_rounded,
+                                                          size: 15,
+                                                          color: pRec > 0 ? const Color(0xFF15803D) : Colors.grey.shade600,
+                                                        ),
+                                                        const SizedBox(width: 4),
+                                                        Text(
+                                                          'المستلم من المنجد:',
+                                                          style: TextStyle(
+                                                            fontWeight: FontWeight.bold,
+                                                            fontSize: 12,
+                                                            color: pRec > 0 ? const Color(0xFF15803D) : Colors.grey.shade700,
                                                           ),
-                                                          if (formattedRecDate.isNotEmpty)
-                                                            Text(
-                                                              '✅ تاريخ الاستلام: $formattedRecDate',
-                                                              style: const TextStyle(fontSize: 11, color: Colors.green, fontWeight: FontWeight.bold),
-                                                            ),
-                                                        ],
+                                                        ),
+                                                      ],
+                                                    ),
+                                                    Container(
+                                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                      decoration: BoxDecoration(
+                                                        color: pRec > 0 ? const Color(0xFF15803D) : Colors.grey.shade400,
                                                       ),
-                                                    ],
-                                                  ),
+                                                      child: Text(
+                                                        '$pRec قطعة',
+                                                        style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                                const SizedBox(height: 5),
+                                                Row(
+                                                  children: [
+                                                    Icon(
+                                                      pRec > 0 ? Icons.event_available_rounded : Icons.hourglass_empty_rounded,
+                                                      size: 12,
+                                                      color: pRec > 0 ? const Color(0xFF15803D) : Colors.grey,
+                                                    ),
+                                                    const SizedBox(width: 4),
+                                                    Expanded(
+                                                      child: Text(
+                                                        formattedRecDate.isNotEmpty
+                                                            ? 'تاريخ الاستلام: $formattedRecDate'
+                                                            : 'لم يتم الاستلام بعد',
+                                                        style: TextStyle(
+                                                          fontSize: 11,
+                                                          color: pRec > 0 ? const Color(0xFF166534) : Colors.grey.shade600,
+                                                          fontWeight: pRec > 0 ? FontWeight.bold : FontWeight.normal,
+                                                        ),
+                                                        overflow: TextOverflow.ellipsis,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ],
+                                            ),
+                                          );
+
+                                          return Container(
+                                            margin: const EdgeInsets.only(bottom: 8),
+                                            padding: const EdgeInsets.all(10),
+                                            decoration: BoxDecoration(
+                                              color: Colors.white,
+                                              borderRadius: BorderRadius.circular(10),
+                                              border: Border.all(
+                                                color: pieceDone ? Colors.green.shade200 : Colors.grey.shade200,
+                                              ),
+                                              boxShadow: [
+                                                BoxShadow(
+                                                  color: Colors.black.withOpacity(0.02),
+                                                  blurRadius: 4,
+                                                  offset: const Offset(0, 1),
+                                                ),
+                                              ],
+                                            ),
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Row(
+                                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                  children: [
+                                                    Row(
+                                                      children: [
+                                                        Icon(
+                                                          Icons.chair_rounded,
+                                                          size: 18,
+                                                          color: pieceDone ? Colors.green : AppTheme.primaryNavy,
+                                                        ),
+                                                        const SizedBox(width: 6),
+                                                        Text(
+                                                          pName,
+                                                          style: const TextStyle(
+                                                            fontWeight: FontWeight.bold,
+                                                            fontSize: 14,
+                                                            color: AppTheme.primaryNavy,
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                    Container(
+                                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                                      decoration: BoxDecoration(
+                                                        color: pieceDone ? Colors.green.shade50 : (pRec > 0 ? Colors.amber.shade50 : Colors.grey.shade100),
+                                                        borderRadius: BorderRadius.circular(6),
+                                                        border: Border.all(
+                                                          color: pieceDone ? Colors.green.shade300 : (pRec > 0 ? Colors.amber.shade300 : Colors.grey.shade300),
+                                                        ),
+                                                      ),
+                                                      child: Text(
+                                                        pieceDone
+                                                            ? 'مكتملة بالكامل'
+                                                            : (pRec > 0 ? 'مستلم ($pRec من $pSent)' : 'قيد التنجيد (متبقي $pSent)'),
+                                                        style: TextStyle(
+                                                          fontSize: 10,
+                                                          fontWeight: FontWeight.bold,
+                                                          color: pieceDone
+                                                              ? Colors.green.shade800
+                                                              : (pRec > 0 ? Colors.amber.shade900 : Colors.blueGrey.shade700),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                                const SizedBox(height: 8),
+                                                LayoutBuilder(
+                                                  builder: (context, constraints) {
+                                                    if (constraints.maxWidth < 450) {
+                                                      return Column(
+                                                        children: [
+                                                          sentBlock,
+                                                          const SizedBox(height: 6),
+                                                          recBlock,
+                                                        ],
+                                                      );
+                                                    }
+                                                    return Row(
+                                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                                      children: [
+                                                        Expanded(child: sentBlock),
+                                                        const SizedBox(width: 8),
+                                                        Expanded(child: recBlock),
+                                                      ],
+                                                    );
+                                                  },
                                                 ),
                                               ],
                                             ),
@@ -1825,6 +2054,7 @@ class _PieceReceiveItemWidget extends StatefulWidget {
   final ValueChanged<int> onReceivePieces;
 
   const _PieceReceiveItemWidget({
+    super.key,
     required this.pieceName,
     required this.baseQty,
     required this.sentQty,

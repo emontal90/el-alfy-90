@@ -10,7 +10,9 @@ import '../core/db_helper.dart';
 import 'backup_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
-  const DashboardScreen({super.key});
+  final void Function(int tabIndex, {int? managementSubTab})? onNavigateTab;
+
+  const DashboardScreen({super.key, this.onNavigateTab});
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
@@ -114,14 +116,50 @@ class _DashboardScreenState extends State<DashboardScreen> {
               physics: const NeverScrollableScrollPhysics(),
               mainAxisSpacing: 12,
               crossAxisSpacing: 12,
-              childAspectRatio: 1.3,
+              childAspectRatio: 1.25,
               children: [
-                StatCard(title: 'قائمة الانتظار', value: '$waitingOrders أوردر', icon: Icons.pending_actions_rounded, color: Colors.orange.shade800),
-                StatCard(title: 'تم التسليم', value: '$deliveredOrders أوردر', icon: Icons.task_alt_rounded, color: Colors.green.shade700),
-                StatCard(title: 'رصيد مخزن المعرض', value: '$totalStock طقم جاهز', icon: Icons.storefront_rounded, color: AppTheme.primaryNavy),
-                StatCard(title: 'قطع لدى المنجد', value: '$upholstererRemainingPieces قطعة بالتشطيب', icon: Icons.chair_alt_rounded, color: Colors.purple.shade700),
-                StatCard(title: 'العملاء المسجلين', value: '$customersCount عميل', icon: Icons.people_alt_rounded, color: Colors.teal.shade700),
-                StatCard(title: 'الأصناف (الأطقم)', value: '$categoriesCount صنف', icon: Icons.category_rounded, color: Colors.brown.shade700),
+                StatCard(
+                  title: 'قائمة الانتظار',
+                  value: '$waitingOrders أوردر',
+                  icon: Icons.pending_actions_rounded,
+                  color: Colors.orange.shade800,
+                  onTap: () => widget.onNavigateTab?.call(1),
+                ),
+                StatCard(
+                  title: 'تم التسليم',
+                  value: '$deliveredOrders أوردر',
+                  icon: Icons.task_alt_rounded,
+                  color: Colors.green.shade700,
+                  onTap: () => widget.onNavigateTab?.call(2),
+                ),
+                StatCard(
+                  title: 'مخزن المعرض',
+                  value: '$totalStock طقم جاهز',
+                  icon: Icons.storefront_rounded,
+                  color: AppTheme.primaryNavy,
+                  onTap: () => widget.onNavigateTab?.call(4, managementSubTab: 0),
+                ),
+                StatCard(
+                  title: 'ورشة المنجد',
+                  value: '$upholstererRemainingPieces قطعة بالتشطيب',
+                  icon: Icons.chair_alt_rounded,
+                  color: Colors.purple.shade700,
+                  onTap: () => widget.onNavigateTab?.call(3),
+                ),
+                StatCard(
+                  title: 'سجل العملاء',
+                  value: '$customersCount عميل',
+                  icon: Icons.people_alt_rounded,
+                  color: Colors.teal.shade700,
+                  onTap: () => widget.onNavigateTab?.call(4, managementSubTab: 2),
+                ),
+                StatCard(
+                  title: 'قائمة الأصناف',
+                  value: '$categoriesCount صنف',
+                  icon: Icons.category_rounded,
+                  color: Colors.brown.shade700,
+                  onTap: () => widget.onNavigateTab?.call(4, managementSubTab: 1),
+                ),
               ],
             ),
           ],

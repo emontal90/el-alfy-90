@@ -16,19 +16,41 @@ class MainNavigationScreen extends StatefulWidget {
 
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int _currentIndex = 0;
+  final GlobalKey<ManagementHubScreenState> _managementHubKey = GlobalKey<ManagementHubScreenState>();
 
-  final List<Widget> _screens = [
-    const DashboardScreen(),
-    const WaitingOrdersScreen(),
-    const DeliveredOrdersScreen(),
-    const UpholstererScreen(),
-    const ManagementHubScreen(),
-  ];
+  late final List<Widget> _screens;
+
+  @override
+  void initState() {
+    super.initState();
+    _screens = [
+      DashboardScreen(onNavigateTab: _handleNavigate),
+      const WaitingOrdersScreen(),
+      const DeliveredOrdersScreen(),
+      const UpholstererScreen(),
+      ManagementHubScreen(key: _managementHubKey, initialTabIndex: 0),
+    ];
+  }
+
+  void _handleNavigate(int tabIndex, {int? managementSubTab}) {
+    setState(() {
+      _currentIndex = tabIndex;
+    });
+    if (tabIndex == 4 && managementSubTab != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _managementHubKey.currentState?.switchToTab(managementSubTab);
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: _screens[_currentIndex],
+      // استخدام IndexedStack للحفاظ على الشاشات في الذاكرة وتسريع التنقل اللحظي بدون أي تأخير أو إعادة تحميل
+      body: IndexedStack(
+        index: _currentIndex,
+        children: _screens,
+      ),
       floatingActionButton: (_currentIndex == 3 || _currentIndex == 4)
           ? null
           : FloatingActionButton.extended(
@@ -38,8 +60,11 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                 final res = await Navigator.push(context, MaterialPageRoute(builder: (_) => const NewOrderScreen()));
                 if (res == true) {
                   AppEvents.instance.notifyAll();
+                  // الانتقال التلقائي المباشر إلى صفحة قائمة الانتظار بعد إدخال طلب عميل جديد
+                  setState(() {
+                    _currentIndex = 1;
+                  });
                 }
-                setState(() {});
               },
               icon: const Icon(Icons.add_shopping_cart_rounded),
               label: const Text('طلب جديد', style: TextStyle(fontWeight: FontWeight.bold)),
@@ -47,8 +72,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
         onDestinationSelected: (idx) {
+          // تنقل فوري سلس بدون تشغيل استعلامات غير ضرورية
           setState(() => _currentIndex = idx);
-          AppEvents.instance.notifyAll(); // تحديث فوري فوري للبيانات عند التبديل بين التبويبات
         },
         destinations: const [
           NavigationDestination(icon: Icon(Icons.dashboard_rounded), label: 'الرئيسية'),
