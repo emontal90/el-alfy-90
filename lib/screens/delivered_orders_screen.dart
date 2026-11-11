@@ -17,6 +17,7 @@ class _DeliveredOrdersScreenState extends State<DeliveredOrdersScreen> {
   List<Map<String, dynamic>> _orders = [];
   String _searchQuery = '';
   final TextEditingController _searchCtrl = TextEditingController();
+  final Set<int> _expandedOrderIds = {};
 
   // فلاتر تاريخ التسليم: الكل، اليوم، أو فترة مخصصة (من - إلى)
   String _dateFilterType = 'all'; // 'all', 'today', 'range'
@@ -394,12 +395,29 @@ class _DeliveredOrdersScreenState extends State<DeliveredOrdersScreen> {
                     )
                   : ListView.builder(
                       physics: const AlwaysScrollableScrollPhysics(),
-                      padding: const EdgeInsets.all(12),
+                      padding: const EdgeInsets.only(
+                          left: 12, right: 12, top: 12, bottom: 80),
                       itemCount: list.length,
-                      itemBuilder: (ctx, i) => OrderCard(
-                        order: list[i],
-                        isDelivered: true,
-                      ),
+                      itemBuilder: (ctx, i) {
+                        final order = list[i];
+                        final int orderId = (order['id'] as int?) ?? i;
+                        final bool isExpanded = _expandedOrderIds.contains(orderId);
+                        return OrderCard(
+                          order: order,
+                          isDelivered: true,
+                          collapsible: true,
+                          isExpanded: isExpanded,
+                          onToggleExpand: () {
+                            setState(() {
+                              if (isExpanded) {
+                                _expandedOrderIds.remove(orderId);
+                              } else {
+                                _expandedOrderIds.add(orderId);
+                              }
+                            });
+                          },
+                        );
+                      },
                     ),
             ),
           ),

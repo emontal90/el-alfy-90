@@ -440,7 +440,9 @@ class OrderCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         side: BorderSide(
           color: isDelivered
-              ? Colors.green.shade200
+              ? (collapsible && isExpanded
+                  ? Colors.green.shade500
+                  : Colors.green.shade200)
               : (collapsible && isExpanded
                   ? AppTheme.royalGold
                   : AppTheme.royalGold.withValues(alpha: 0.4)),

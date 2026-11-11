@@ -1,6 +1,8 @@
 import 'dart:convert';
 
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:furniture_erp/components/order_card.dart';
 import 'package:furniture_erp/core/order_delivery_helper.dart';
 import 'package:furniture_erp/screens/dashboard_screen.dart';
 
@@ -184,6 +186,58 @@ void main() {
         {'name': 'فوتيه', 'base_qty': 2, 'qty': 3},
       ]);
     });
+  });
+
+  testWidgets('Delivered OrderCard collapses summary and expands on tap', (tester) async {
+    bool isExpanded = false;
+    final sampleOrder = {
+      'id': 10,
+      'customer_name': 'أحمد علي',
+      'category_name': 'كنز',
+      'order_type': 'نمطي',
+      'sets_count': 1,
+      'delivery_date': '2026-11-10',
+      'created_at': '2026-11-01 10:00:00',
+      'specs': 'قماش كتان رمادي',
+      'selected_components_json': jsonEncode([
+        {'name': 'كنبة كبيرة', 'qty': 1},
+        {'name': 'فوتيه', 'qty': 2},
+      ]),
+    };
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Directionality(
+          textDirection: TextDirection.rtl,
+          child: Scaffold(
+            body: StatefulBuilder(
+              builder: (context, setState) {
+                return OrderCard(
+                  order: sampleOrder,
+                  isDelivered: true,
+                  collapsible: true,
+                  isExpanded: isExpanded,
+                  onToggleExpand: () => setState(() => isExpanded = !isExpanded),
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('أحمد علي'), findsOneWidget);
+    expect(find.text('طقم: كنز'), findsOneWidget);
+    expect(find.text('قطع ومكونات الطلب:'), findsNothing);
+    expect(find.text('المواصفات: قماش كتان رمادي'), findsNothing);
+
+    await tester.tap(find.byType(OrderCard));
+    await tester.pumpAndSettle();
+
+    expect(find.text('قطع ومكونات الطلب:'), findsOneWidget);
+    expect(find.text('المواصفات: قماش كتان رمادي'), findsOneWidget);
+    expect(find.text('كنبة كبيرة'), findsOneWidget);
+    expect(find.text('تسليم الطلب'), findsNothing);
   });
 }
 
