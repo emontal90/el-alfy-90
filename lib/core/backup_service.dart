@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/painting.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart' as intl;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -9,6 +10,9 @@ import 'app_events.dart';
 import 'db_helper.dart';
 
 class BackupService {
+  static const int maxBackups = 5;
+  static const MethodChannel _transferChannel =
+      MethodChannel('com.example.furniture_erp/backup_transfer');
   /// مجلد حفظ النسخ الاحتياطية على الموبايل والكمبيوتر
   static Future<Directory> getBackupDir() async {
     final dir = await getApplicationDocumentsDirectory();
@@ -75,10 +79,8 @@ class BackupService {
       final destPath = p.join(backupDir.path, fileName);
       await srcFile.copy(destPath);
 
-      // إدارة النسخ التلقائية القديمة والاحتفاظ بآخر 30 نسخة يومية فقط
-      if (isAuto) {
-        await _cleanOldAutoBackups(backupDir);
-      }
+      // الاحتفاظ بآخر 5 نسخ احتياطية فقط وحذف الأقدم لمنع تضخم الملفات
+      await enforceMaxBackupLimit(backupDir);
 
       return destPath;
     } catch (e) {
@@ -95,34 +97,189 @@ class BackupService {
       final todayBackup = File(p.join(backupDir.path, 'auto_backup_$dateStr.db'));
       if (!await todayBackup.exists()) {
         await createBackup(isAuto: true);
+      } else {
+        await enforceMaxBackupLimit(backupDir);
       }
     } catch (_) {}
   }
 
-  /// حذف النسخ اليومية التلقائية الأقدم من 30 يوماً لتوفير المساحة، مع الاحتفاظ بجميع النسخ اليدوية
-  static Future<void> _cleanOldAutoBackups(Directory backupDir) async {
+  /// التأكد من أن إجمالي ملفات النسخ الاحتياطية لا يتجاوز [maxCount] (5 ملفات افتراضياً) وحذف الأقدم
+  static Future<void> enforceMaxBackupLimit(
+    Directory backupDir, {
+    int maxCount = maxBackups,
+  }) async {
     try {
-      final files = backupDir.listSync().whereType<File>().toList();
-      final autoBackups = files.where((f) => p.basename(f.path).startsWith('auto_backup_')).toList();
-      if (autoBackups.length > 30) {
-        autoBackups.sort((a, b) => b.statSync().modified.compareTo(a.statSync().modified));
-        for (int i = 30; i < autoBackups.length; i++) {
-          await autoBackups[i].delete();
-        }
+      if (!await backupDir.exists()) return;
+      final dbFiles = backupDir
+          .listSync()
+          .whereType<File>()
+          .where((f) => f.path.toLowerCase().endsWith('.db'))
+          .toList();
+
+      if (dbFiles.length <= maxCount) return;
+
+      dbFiles.sort((a, b) {
+        final modCmp = b.statSync().modified.compareTo(a.statSync().modified);
+        if (modCmp != 0) return modCmp;
+        return p.basename(b.path).compareTo(p.basename(a.path));
+      });
+
+      for (int i = maxCount; i < dbFiles.length; i++) {
+        try {
+          await dbFiles[i].delete();
+        } catch (_) {}
       }
     } catch (_) {}
   }
 
-  /// جلب قائمة جميع النسخ الاحتياطية مرتبة من الأحدث للأقدم
+  /// جلب قائمة جميع النسخ الاحتياطية مرتبة من الأحدث للأقدم (بحد أقصى 5 نسخ)
   static Future<List<FileSystemEntity>> listBackups() async {
     if (kIsWeb) return [];
     try {
       final dir = await getBackupDir();
-      final files = dir.listSync().where((f) => f.path.endsWith('.db')).toList();
+      await enforceMaxBackupLimit(dir);
+      final files = dir.listSync().where((f) => f.path.toLowerCase().endsWith('.db')).toList();
       files.sort((a, b) => b.statSync().modified.compareTo(a.statSync().modified));
       return files;
     } catch (_) {
       return [];
+    }
+  }
+
+  /// التحقق من أن الملف المختار هو قاعدة بيانات SQLite صالحة لتطبيق الألفي
+  static Future<bool> isValidBackupDatabase(String filePath) async {
+    try {
+      final file = File(filePath);
+      if (!await file.exists() || await file.length() < 1024) {
+        return false;
+      }
+
+      // 1. فحص ترويسة SQLite الرسمية: "SQLite format 3\0"
+      const expectedHeader = [
+        0x53, 0x51, 0x4C, 0x69, 0x74, 0x65, 0x20, 0x66,
+        0x6F, 0x72, 0x6D, 0x61, 0x74, 0x20, 0x33, 0x00,
+      ];
+      final raf = await file.open(mode: FileMode.read);
+      try {
+        final header = await raf.read(16);
+        if (header.length < 16) return false;
+        for (int i = 0; i < 16; i++) {
+          if (header[i] != expectedHeader[i]) return false;
+        }
+      } finally {
+        await raf.close();
+      }
+
+      // 2. التأكد من وجود الجداول الأساسية للتطبيق
+      final testDb = await openReadOnlyDatabase(filePath);
+      try {
+        final rows = await testDb.rawQuery(
+          "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('orders', 'customers', 'categories')",
+        );
+        return rows.length == 3;
+      } finally {
+        await testDb.close();
+      }
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// تصدير نسخة احتياطية إلى مجلد التنزيلات في الهاتف (تبقى محفوظة حتى لو حُذف التطبيق)
+  static Future<String?> exportBackupToDownloads(String backupFilePath) async {
+    if (kIsWeb) return null;
+    final sourceFile = File(backupFilePath);
+    if (!await sourceFile.exists()) {
+      throw Exception('ملف النسخة الاحتياطية غير موجود');
+    }
+
+    final fileName = p.basename(sourceFile.path);
+    if (Platform.isAndroid) {
+      return await _transferChannel.invokeMethod<String>(
+        'exportBackupToDownloads',
+        {'path': sourceFile.path, 'fileName': fileName},
+      );
+    }
+
+    // في نظام ويندوز: الحفظ في Downloads\ElAlfyBackups مع حد أقصى 5 نسخ
+    final userProfile = Platform.environment['USERPROFILE'];
+    if (userProfile != null && userProfile.isNotEmpty) {
+      final dlDir = Directory(p.join(userProfile, 'Downloads', 'ElAlfyBackups'));
+      if (!await dlDir.exists()) {
+        await dlDir.create(recursive: true);
+      }
+      final dest = File(p.join(dlDir.path, fileName));
+      await sourceFile.copy(dest.path);
+      await enforceMaxBackupLimit(dlDir);
+      return dest.path;
+    }
+
+    return null;
+  }
+
+  /// إنشاء نسخة جديدة وتصديرها فوراً إلى مجلد التنزيلات
+  static Future<String?> createAndExportBackupToDownloads() async {
+    final createdPath = await createBackup(isAuto: false);
+    if (createdPath.startsWith('فشل') || createdPath.startsWith('قاعدة') || createdPath.startsWith('النسخ')) {
+      throw Exception(createdPath);
+    }
+    return await exportBackupToDownloads(createdPath);
+  }
+
+  /// مشاركة نسخة احتياطية خارج التطبيق (واتساب / تيليجرام / Google Drive ...)
+  static Future<void> shareBackupFile(String backupFilePath) async {
+    if (kIsWeb || !Platform.isAndroid) {
+      throw UnsupportedError('المشاركة المباشرة متاحة على أجهزة Android فقط.');
+    }
+    final sourceFile = File(backupFilePath);
+    if (!await sourceFile.exists()) {
+      throw Exception('ملف النسخة الاحتياطية غير موجود');
+    }
+    await _transferChannel.invokeMethod<void>(
+      'shareBackupFile',
+      {'path': sourceFile.path, 'fileName': p.basename(sourceFile.path)},
+    );
+  }
+
+  /// اختيار ملف نسخة احتياطية (.db) من الهاتف واستعادته بأمان بعد التحقق من سلامته
+  /// يعيد اسم الملف المستعاد أو `null` إذا ألغى المستخدم الاختيار
+  static Future<String?> importAndRestoreExternalBackup() async {
+    if (kIsWeb || !Platform.isAndroid) {
+      throw UnsupportedError('الاستيراد من منتقي النظام متاح حالياً على Android.');
+    }
+
+    final pickedTempPath = await _transferChannel.invokeMethod<String>('pickBackupFile');
+    if (pickedTempPath == null || pickedTempPath.isEmpty) {
+      return null;
+    }
+
+    final tempFile = File(pickedTempPath);
+    try {
+      final valid = await isValidBackupDatabase(pickedTempPath);
+      if (!valid) {
+        throw Exception('الملف المختار لا يخص قاعدة بيانات نظام الألفي أو أنه تالف.');
+      }
+
+      // أخذ نسخة وقائية من البيانات الحالية قبل الاستبدال
+      await createBackup(isAuto: false, prefix: 'pre_import_backup');
+
+      final restored = await restoreBackup(pickedTempPath);
+      if (!restored) {
+        throw Exception('تعذر استعادة البيانات من الملف المختار.');
+      }
+
+      // حفظ نسخة من الملف المستورد ضمن سجل النسخ الاحتياطية (مع الالتزام بحد أقصى 5 نسخ)
+      final backupDir = await getBackupDir();
+      final dateStr = intl.DateFormat('yyyy-MM-dd_HH-mm-ss').format(DateTime.now());
+      final savedCopy = File(p.join(backupDir.path, 'imported_backup_$dateStr.db'));
+      await tempFile.copy(savedCopy.path);
+      await enforceMaxBackupLimit(backupDir);
+
+      return p.basename(savedCopy.path);
+    } finally {
+      try {
+        if (await tempFile.exists()) await tempFile.delete();
+      } catch (_) {}
     }
   }
 

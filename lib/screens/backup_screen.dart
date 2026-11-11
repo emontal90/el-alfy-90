@@ -181,6 +181,137 @@ class _BackupScreenState extends State<BackupScreen> {
     }
   }
 
+  // 4.1 إنشاء وتصدير نسخة احتياطية إلى مجلد التنزيلات في الهاتف
+  Future<void> _createAndExportToDownloads() async {
+    setState(() => _isLoading = true);
+    try {
+      final savedLocation = await BackupService.createAndExportBackupToDownloads();
+      await _loadAllInfo();
+      if (mounted) {
+        if (savedLocation != null && savedLocation.isNotEmpty) {
+          AppNotification.showSuccess(
+            context,
+            'تم حفظ النسخة الاحتياطية في الهاتف:\n$savedLocation',
+          );
+        } else {
+          AppNotification.showInfo(context, 'تم إلغاء حفظ النسخة الخارجية.');
+        }
+      }
+    } catch (e) {
+      await _loadAllInfo();
+      if (mounted) {
+        AppNotification.showError(
+          context,
+          'تعذر تصدير النسخة: ${e.toString().replaceFirst('Exception: ', '')}',
+        );
+      }
+    }
+  }
+
+  // 4.2 تصدير نسخة محددة إلى مجلد التنزيلات
+  Future<void> _exportBackupToDownloads(FileSystemEntity file) async {
+    try {
+      final savedLocation = await BackupService.exportBackupToDownloads(file.path);
+      if (mounted) {
+        if (savedLocation != null && savedLocation.isNotEmpty) {
+          AppNotification.showSuccess(
+            context,
+            'تم حفظ النسخة في الهاتف:\n$savedLocation',
+          );
+        } else {
+          AppNotification.showInfo(context, 'تم إلغاء عملية الحفظ.');
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        AppNotification.showError(
+          context,
+          'فشل التصدير: ${e.toString().replaceFirst('Exception: ', '')}',
+        );
+      }
+    }
+  }
+
+  // 4.3 مشاركة نسخة احتياطية عبر التطبيقات (واتساب / تيليجرام / Drive)
+  Future<void> _shareBackup(FileSystemEntity file) async {
+    try {
+      await BackupService.shareBackupFile(file.path);
+    } catch (e) {
+      if (mounted) {
+        AppNotification.showError(
+          context,
+          'تعذر مشاركة النسخة: ${e.toString().replaceFirst('Exception: ', '')}',
+        );
+      }
+    }
+  }
+
+  // 4.4 استيراد نسخة احتياطية (.db) من ذاكرة الهاتف
+  Future<void> _importExternalBackup() async {
+    final bool? confirm = await showDialog<bool>(
+      context: context,
+      builder: (dCtx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.file_upload_outlined, color: AppTheme.primaryNavy, size: 26),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'استيراد نسخة احتياطية من الهاتف',
+                style: TextStyle(fontSize: 16.5, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        content: const Text(
+          'اختر ملف نسخة احتياطية (.db) من ذاكرة الهاتف أو Google Drive.\n\nسيقوم التطبيق أولاً بالتحقق من سلامة الملف وأخذ نسخة وقائية من بياناتك الحالية قبل الاستعادة.',
+          style: TextStyle(fontSize: 13.5, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dCtx, false),
+            child: const Text('إلغاء', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.primaryNavy,
+              foregroundColor: AppTheme.royalGold,
+            ),
+            onPressed: () => Navigator.pop(dCtx, true),
+            child: const Text('اختيار الملف (.db)', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    setState(() => _isLoading = true);
+    try {
+      final restoredName = await BackupService.importAndRestoreExternalBackup();
+      await _loadAllInfo();
+      if (mounted) {
+        if (restoredName == null) {
+          AppNotification.showInfo(context, 'لم يتم اختيار أي ملف.');
+        } else {
+          AppNotification.showSuccess(
+            context,
+            'تم استيراد واستعادة البيانات بنجاح ($restoredName)',
+          );
+        }
+      }
+    } catch (e) {
+      await _loadAllInfo();
+      if (mounted) {
+        AppNotification.showError(
+          context,
+          e.toString().replaceFirst('Exception: ', ''),
+        );
+      }
+    }
+  }
+
   // 5. الأرشفة الذكية لفترة معينة
   Future<void> _performSmartArchive() async {
     if (_eligibleForArchiveCount <= 0) {
@@ -317,9 +448,9 @@ class _BackupScreenState extends State<BackupScreen> {
                       child: _StatCard(
                         icon: Icons.backup_rounded,
                         title: 'النسخ الاحتياطية',
-                        value: '${_backups.length} نسخة',
+                        value: '${_backups.length} / ${BackupService.maxBackups}',
                         color: AppTheme.primaryNavy,
-                        subtitle: 'محفوظة على الجهاز',
+                        subtitle: 'حد أقصى ${BackupService.maxBackups} نسخ تلقائياً',
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -374,6 +505,48 @@ class _BackupScreenState extends State<BackupScreen> {
                     ),
                   ],
                 ),
+                if (!kIsWeb) ...[
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.teal.shade800,
+                            side: BorderSide(color: Colors.teal.shade600),
+                            backgroundColor: Colors.teal.withValues(alpha: 0.05),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          onPressed: _createAndExportToDownloads,
+                          icon: const Icon(Icons.download_for_offline_rounded, size: 20),
+                          label: const Text(
+                            'حفظ نسخة في الهاتف',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.indigo.shade800,
+                            side: BorderSide(color: Colors.indigo.shade500),
+                            backgroundColor: Colors.indigo.withValues(alpha: 0.05),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          onPressed: Platform.isAndroid ? _importExternalBackup : null,
+                          icon: const Icon(Icons.file_upload_rounded, size: 20),
+                          label: const Text(
+                            'استيراد نسخة من الهاتف',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
                 const SizedBox(height: 18),
 
                 // 3. قسم الأرشفة الذكية
@@ -575,6 +748,7 @@ class _BackupScreenState extends State<BackupScreen> {
                     final sizeKb = (stat.size / 1024).toStringAsFixed(1);
                     final isAuto = name.startsWith('auto_backup_');
                     final isArchive = name.startsWith('archive_backup_');
+                    final isImported = name.startsWith('imported_backup_');
 
                     String tag = 'نسخة يدوية';
                     Color tagColor = AppTheme.primaryNavy;
@@ -588,6 +762,10 @@ class _BackupScreenState extends State<BackupScreen> {
                       tag = 'نسخة أرشيف وقائية';
                       tagColor = Colors.brown.shade800;
                       tagBg = Colors.amber.shade50;
+                    } else if (isImported) {
+                      tag = 'نسخة مستوردة';
+                      tagColor = Colors.indigo.shade800;
+                      tagBg = Colors.indigo.shade50;
                     }
 
                     return Card(
@@ -657,10 +835,51 @@ class _BackupScreenState extends State<BackupScreen> {
                                 ],
                               ),
                             ),
-                            IconButton(
-                              tooltip: 'حذف هذه النسخة',
-                              icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
-                              onPressed: () => _deleteBackup(file),
+                            PopupMenuButton<String>(
+                              tooltip: 'خيارات النسخة',
+                              icon: const Icon(Icons.more_vert_rounded, color: AppTheme.primaryNavy),
+                              onSelected: (action) {
+                                if (action == 'download') {
+                                  _exportBackupToDownloads(file);
+                                } else if (action == 'share') {
+                                  _shareBackup(file);
+                                } else if (action == 'delete') {
+                                  _deleteBackup(file);
+                                }
+                              },
+                              itemBuilder: (_) => [
+                                const PopupMenuItem<String>(
+                                  value: 'download',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.download_rounded, color: Colors.teal, size: 20),
+                                      SizedBox(width: 8),
+                                      Text('حفظ في مجلد التنزيلات'),
+                                    ],
+                                  ),
+                                ),
+                                if (Platform.isAndroid)
+                                  const PopupMenuItem<String>(
+                                    value: 'share',
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.share_rounded, color: AppTheme.primaryNavy, size: 20),
+                                        SizedBox(width: 8),
+                                        Text('مشاركة (واتساب / درايف)'),
+                                      ],
+                                    ),
+                                  ),
+                                const PopupMenuItem<String>(
+                                  value: 'delete',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.delete_outline, color: Colors.red, size: 20),
+                                      SizedBox(width: 8),
+                                      Text('حذف هذه النسخة', style: TextStyle(color: Colors.red)),
+                                    ],
+                                  ),
+                                ),
+                              ],
                             ),
                             const SizedBox(width: 4),
                             ElevatedButton.icon(
