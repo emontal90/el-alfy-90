@@ -38,8 +38,35 @@ jobs:
       - name: Get Dependencies
         run: flutter pub get
 
+      - name: Configure Release Signing
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ] || [ -z "$KEYSTORE_PASSWORD" ] || [ -z "$KEY_ALIAS" ] || [ -z "$KEY_PASSWORD" ]; then
+            echo "::error::Missing Android signing secrets! Please add KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS, and KEY_PASSWORD in GitHub Repo Settings -> Secrets and variables -> Actions."
+            exit 1
+          fi
+          KEYSTORE_PATH="$RUNNER_TEMP/el-alfy-release.jks"
+          printf '%s' "$KEYSTORE_BASE64" | tr -d '\r\n ' | base64 --decode > "$KEYSTORE_PATH"
+          chmod 600 "$KEYSTORE_PATH"
+          cat > android/key.properties <<EOF
+          storePassword=$KEYSTORE_PASSWORD
+          keyPassword=$KEY_PASSWORD
+          keyAlias=$KEY_ALIAS
+          storeFile=$KEYSTORE_PATH
+          EOF
+          chmod 600 android/key.properties
+
       - name: Build Release APK
         run: flutter build apk --release
+
+      - name: Clean Signing Secrets
+        if: always()
+        run: |
+          rm -f android/key.properties "$RUNNER_TEMP/el-alfy-release.jks"
 
       - name: Prepare APK Files
         run: |

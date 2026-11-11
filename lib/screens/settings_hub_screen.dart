@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:local_auth/local_auth.dart';
 import '../components/app_logo.dart';
+import '../components/app_update_dialog.dart';
 import '../core/app_notification.dart';
 import '../core/app_settings_service.dart';
 import '../core/app_theme.dart';
+import '../core/app_update_service.dart';
 import '../core/app_version.dart';
 import 'backup_screen.dart';
 
@@ -71,6 +73,7 @@ class _GeneralSettingsTabState extends State<_GeneralSettingsTab> {
   bool _biometricSupported = true;
   bool _isLoading = true;
   bool _isUpdating = false;
+  bool _isCheckingUpdate = false;
 
   @override
   void initState() {
@@ -143,6 +146,33 @@ class _GeneralSettingsTabState extends State<_GeneralSettingsTab> {
         setState(() => _isUpdating = false);
         AppNotification.showError(context, 'تعذر التحقق من البصمة على هذا الجهاز.');
       }
+    }
+  }
+
+  Future<void> _checkForUpdatesManually() async {
+    if (_isCheckingUpdate) return;
+    setState(() => _isCheckingUpdate = true);
+
+    try {
+      final update = await AppUpdateService.checkForUpdate(silent: false);
+      if (!mounted) return;
+      setState(() => _isCheckingUpdate = false);
+
+      if (update != null) {
+        await AppUpdateDialog.show(context, update);
+      } else {
+        AppNotification.showSuccess(
+          context,
+          'تطبيقك محدث بالفعل على أحدث إصدار (${AppVersion.displayVersion}).',
+        );
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isCheckingUpdate = false);
+      AppNotification.showError(
+        context,
+        'تعذر الاتصال بـ GitHub للتحقق من التحديثات. تأكد من اتصال الإنترنت.',
+      );
     }
   }
 
@@ -239,7 +269,7 @@ class _GeneralSettingsTabState extends State<_GeneralSettingsTab> {
 
           const SizedBox(height: 16),
 
-          // بطاقة معلومات التطبيق والإصدار
+          // بطاقة معلومات التطبيق والإصدار والتحديثات
           Card(
             elevation: 1.5,
             shape: RoundedRectangleBorder(
@@ -248,44 +278,72 @@ class _GeneralSettingsTabState extends State<_GeneralSettingsTab> {
             ),
             child: Padding(
               padding: const EdgeInsets.all(16),
-              child: Row(
+              child: Column(
                 children: [
-                  const AppLogo(size: 56),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'نظام الألفي لإدارة المعرض',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: AppTheme.primaryNavy,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'إدارة المخازن، المنجدين، وطلبات العملاء',
-                          style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
-                        ),
-                        const SizedBox(height: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: AppTheme.primaryNavy,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            'الإصدار ${AppVersion.fullVersion}',
-                            style: const TextStyle(
-                              color: AppTheme.royalGold,
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
+                  Row(
+                    children: [
+                      const AppLogo(size: 56),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'نظام الألفي لإدارة المعرض',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: AppTheme.primaryNavy,
+                              ),
                             ),
-                          ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'إدارة المخازن، المنجدين، وطلبات العملاء',
+                              style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                            ),
+                            const SizedBox(height: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: AppTheme.primaryNavy,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                'الإصدار ${AppVersion.fullVersion}',
+                                style: const TextStyle(
+                                  color: AppTheme.royalGold,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppTheme.primaryNavy,
+                        side: BorderSide(color: AppTheme.primaryNavy.withValues(alpha: 0.35)),
+                        padding: const EdgeInsets.symmetric(vertical: 11),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      onPressed: _isCheckingUpdate ? null : _checkForUpdatesManually,
+                      icon: _isCheckingUpdate
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.system_update_rounded, size: 20),
+                      label: Text(
+                        _isCheckingUpdate ? 'جارٍ التحقق من التحديثات...' : 'التحقق من التحديثات',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
                     ),
                   ),
                 ],

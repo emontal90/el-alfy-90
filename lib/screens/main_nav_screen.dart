@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:local_auth/local_auth.dart';
+import '../components/app_update_dialog.dart';
 import '../core/app_events.dart';
 import '../core/app_notification.dart';
 import '../core/app_settings_service.dart';
 import '../core/app_theme.dart';
+import '../core/app_update_service.dart';
 import 'dashboard_screen.dart';
 import 'waiting_orders_screen.dart';
 import 'delivered_orders_screen.dart';
@@ -33,7 +35,20 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       const UpholstererScreen(),
       ManagementHubScreen(key: _managementHubKey, initialTabIndex: 0),
     ];
-    WidgetsBinding.instance.addPostFrameCallback((_) => _checkFirstLaunchBiometricPrompt());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _runStartupPrompts());
+  }
+
+  Future<void> _runStartupPrompts() async {
+    await _checkFirstLaunchBiometricPrompt();
+    if (!mounted) return;
+    await _checkForAppUpdatesSilently();
+  }
+
+  Future<void> _checkForAppUpdatesSilently() async {
+    final update = await AppUpdateService.checkForUpdate(silent: true);
+    if (update != null && mounted) {
+      await AppUpdateDialog.show(context, update);
+    }
   }
 
   Future<void> _checkFirstLaunchBiometricPrompt() async {
