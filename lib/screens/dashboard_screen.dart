@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:sqflite/sqflite.dart';
 import '../components/app_logo.dart';
@@ -12,6 +14,92 @@ class DashboardScreen extends StatefulWidget {
   final void Function(int tabIndex, {int? managementSubTab})? onNavigateTab;
 
   const DashboardScreen({super.key, this.onNavigateTab});
+
+  /// حساب إجمالي الأطقم الكاملة والقطع الفردية الزائدة وإجمالي القطع المتبقية عند المنجد
+  static Map<String, int> calculateUpholstererWorkshopStats(
+    List<Map<String, dynamic>> batches,
+    Map<int, int> categoryComponentsCount,
+  ) {
+    int totalSets = 0;
+    int totalIndividual = 0;
+    int totalPieces = 0;
+
+    for (final b in batches) {
+      final int sent = (b['total_sent'] is int)
+          ? b['total_sent'] as int
+          : (int.tryParse('${b['total_sent']}') ?? 0);
+      final int rec = (b['received_qty'] is int)
+          ? b['received_qty'] as int
+          : (int.tryParse('${b['received_qty']}') ?? 0);
+      final int remBatch = sent - rec;
+      if (remBatch <= 0) continue;
+
+      List pieces = [];
+      final rawPieces = b['pieces_json']?.toString() ?? '';
+      if (rawPieces.trim().isNotEmpty) {
+        try {
+          pieces = jsonDecode(rawPieces);
+        } catch (_) {}
+      }
+
+      if (pieces.isEmpty) {
+        totalPieces += remBatch;
+        totalIndividual += remBatch;
+        continue;
+      }
+
+      final int? catId = b['category_id'] as int?;
+      final int expectedComps = catId != null ? (categoryComponentsCount[catId] ?? 0) : 0;
+
+      final List<int> remainingPerPiece = [];
+      final List<int> basePerPiece = [];
+      int batchPiecesSum = 0;
+
+      for (final pItem in pieces) {
+        if (pItem is! Map) continue;
+        final int pSent = (pItem['sent_qty'] is int)
+            ? pItem['sent_qty'] as int
+            : (int.tryParse('${pItem['sent_qty']}') ?? 0);
+        final int pRec = (pItem['received_qty'] is int)
+            ? pItem['received_qty'] as int
+            : (int.tryParse('${pItem['received_qty']}') ?? 0);
+        final int pBase = (pItem['base_qty'] is int)
+            ? pItem['base_qty'] as int
+            : (int.tryParse('${pItem['base_qty']}') ?? 1);
+        final int remQ = math.max(0, pSent - pRec);
+        final int safeBase = pBase > 0 ? pBase : 1;
+
+        remainingPerPiece.add(remQ);
+        basePerPiece.add(safeBase);
+        batchPiecesSum += remQ;
+      }
+
+      if (batchPiecesSum <= 0) continue;
+      totalPieces += batchPiecesSum;
+
+      if (expectedComps == 0 || remainingPerPiece.length >= expectedComps) {
+        int completeSets = remainingPerPiece[0] ~/ basePerPiece[0];
+        for (int i = 1; i < remainingPerPiece.length; i++) {
+          completeSets = math.min(completeSets, remainingPerPiece[i] ~/ basePerPiece[i]);
+        }
+        int excess = 0;
+        for (int i = 0; i < remainingPerPiece.length; i++) {
+          excess += remainingPerPiece[i] - (completeSets * basePerPiece[i]);
+        }
+        totalSets += completeSets;
+        totalIndividual += excess;
+      } else {
+        totalIndividual += batchPiecesSum;
+      }
+    }
+
+    return {
+      'sets': totalSets,
+      'individual': totalIndividual,
+      'totalPieces': totalPieces,
+    };
+  }
+
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
@@ -29,6 +117,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   int deliveredStandard = 0;
   int deliveredCustom = 0;
 
+  int upholstererRemainingSets = 0;
+  int upholstererRemainingIndividualPieces = 0;
   int upholstererRemainingPieces = 0;
 
   @override
@@ -66,7 +156,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
       "SELECT COUNT(*) FROM orders WHERE status = 'delivered' AND (order_type != 'نمطي' AND order_type != 'نمطى')"
     )) ?? 0;
 
-    final uph = Sqflite.firstIntValue(await db.rawQuery('SELECT SUM(total_sent - received_qty) FROM upholsterer_batches')) ?? 0;
+    final catRows = await db.query('categories', columns: ['id', 'components_json']);
+    final Map<int, int> catCompCounts = {};
+    for (final c in catRows) {
+      final int? id = c['id'] as int?;
+      if (id == null) continue;
+      try {
+        final List comps = jsonDecode((c['components_json'] ?? '[]').toString());
+        catCompCounts[id] = comps.length;
+      } catch (_) {}
+    }
+
+    final batchRows = await db.query(
+      'upholsterer_batches',
+      columns: ['category_id', 'total_sent', 'received_qty', 'pieces_json'],
+    );
+    final uphStats = DashboardScreen.calculateUpholstererWorkshopStats(batchRows, catCompCounts);
 
     if (mounted) {
       setState(() {
@@ -77,7 +182,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
         waitingCustom = waitCust;
         deliveredStandard = delivStd;
         deliveredCustom = delivCust;
-        upholstererRemainingPieces = uph;
+        upholstererRemainingSets = uphStats['sets']!;
+        upholstererRemainingIndividualPieces = uphStats['individual']!;
+        upholstererRemainingPieces = uphStats['totalPieces']!;
       });
     }
   }
@@ -224,12 +331,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   onTap: () => widget.onNavigateTab?.call(4, managementSubTab: 0),
                 ),
 
-                // 4. ورشة المنجد
-                StatCard(
+                // 4. ورشة المنجد (أطقم كاملة وفردي في نفس الكارت)
+                SplitStatCard(
                   title: 'ورشة المنجد',
-                  value: '$upholstererRemainingPieces قطعة بالتشطيب',
                   icon: Icons.chair_alt_rounded,
                   color: Colors.purple.shade700,
+                  standardCount: upholstererRemainingSets,
+                  customCount: upholstererRemainingIndividualPieces,
+                  firstLabel: 'أطقم',
+                  secondLabel: 'فردي',
+                  footerText: 'إجمالي القطع: $upholstererRemainingPieces',
                   onTap: () => widget.onNavigateTab?.call(3),
                 ),
 

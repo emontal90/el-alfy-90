@@ -134,8 +134,11 @@ class SplitStatCard extends StatelessWidget {
   final String title;
   final IconData icon;
   final Color color;
-  final int standardCount; // نمطي
-  final int customCount;   // أوردر
+  final int standardCount; // القيمة الأولى (نمطي / أطقم)
+  final int customCount;   // القيمة الثانية (أوردر / فردي)
+  final String firstLabel;
+  final String secondLabel;
+  final String? footerText;
   final VoidCallback? onTap;
 
   const SplitStatCard({
@@ -145,6 +148,9 @@ class SplitStatCard extends StatelessWidget {
     required this.color,
     required this.standardCount,
     required this.customCount,
+    this.firstLabel = 'نمطي',
+    this.secondLabel = 'أوردر',
+    this.footerText,
     this.onTap,
   });
 
@@ -227,13 +233,13 @@ class SplitStatCard extends StatelessWidget {
                 ),
                 child: Row(
                   children: [
-                    // النصف الأول: نمطي
+                    // النصف الأول
                     Expanded(
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
-                            'نمطي',
+                            firstLabel,
                             style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.bold,
@@ -258,13 +264,13 @@ class SplitStatCard extends StatelessWidget {
                       height: 32,
                       color: color.withValues(alpha: 0.25),
                     ),
-                    // النصف الثاني: أوردر
+                    // النصف الثاني
                     Expanded(
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
-                            'أوردر',
+                            secondLabel,
                             style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.bold,
@@ -287,19 +293,25 @@ class SplitStatCard extends StatelessWidget {
                 ),
               ),
 
-              // الصف السفلي: إجمالي الطلبات ومؤشر الضغط
+              // الصف السفلي: الإجمالي ومؤشر الفتح
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    'الإجمالي: $total',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      color: color,
+                  Flexible(
+                    child: Text(
+                      footerText ?? 'الإجمالي: $total',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: color,
+                      ),
                     ),
                   ),
+                  const SizedBox(width: 4),
                   Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
                         'فتح القائمة',
