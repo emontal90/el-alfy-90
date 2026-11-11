@@ -188,18 +188,7 @@ class _DeliveredOrdersScreenState extends State<DeliveredOrdersScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Row(
-          children: [
-            AppLogo(size: 34),
-            SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                'سجل الأوردرات التي تم تسليمها',
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
+        title: const AppBarTitleWithLogo(title: 'سجل الأوردرات التي تم تسليمها'),
         actions: const [
           DistinctiveRefreshButton(),
         ],

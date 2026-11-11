@@ -51,18 +51,7 @@ class ManagementHubScreenState extends State<ManagementHubScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Row(
-          children: [
-            AppLogo(size: 34),
-            SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                'إدارة المخزن والأصناف والعملاء',
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
+        title: const AppBarTitleWithLogo(title: 'إدارة المخزن والأصناف والعملاء'),
         actions: const [
           DistinctiveRefreshButton(),
         ],

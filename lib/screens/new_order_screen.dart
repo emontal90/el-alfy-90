@@ -308,20 +308,11 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Row(
-          children: [
-            AppLogo(size: 34),
-            SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                'إدخال طلب عميل جديد',
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
+        title: const AppBarTitleWithLogo(title: 'إدخال طلب عميل جديد'),
       ),
-      body: ListView(
+      body: SafeArea(
+        top: false,
+        child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
           // 1. اختيار العميل
@@ -885,8 +876,9 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 24),
         ],
+      ),
       ),
     );
   }

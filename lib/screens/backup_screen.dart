@@ -11,7 +11,8 @@ import '../core/app_theme.dart';
 import '../core/backup_service.dart';
 
 class BackupScreen extends StatefulWidget {
-  const BackupScreen({super.key});
+  final bool embedded;
+  const BackupScreen({super.key, this.embedded = false});
   @override
   State<BackupScreen> createState() => _BackupScreenState();
 }
@@ -290,25 +291,9 @@ class _BackupScreenState extends State<BackupScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Row(
-          children: [
-            AppLogo(size: 34),
-            SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                'النسخ الاحتياطي والأرشفة الذكية',
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
-        actions: const [
-          DistinctiveRefreshButton(),
-        ],
-      ),
-      body: _isLoading
+    final Widget bodyContent = SafeArea(
+      top: false,
+      child: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : ListView(
               padding: const EdgeInsets.all(16),
@@ -695,6 +680,20 @@ class _BackupScreenState extends State<BackupScreen> {
                 const SizedBox(height: 30),
               ],
             ),
+    );
+
+    if (widget.embedded) {
+      return bodyContent;
+    }
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const AppBarTitleWithLogo(title: 'النسخ الاحتياطي والأرشفة الذكية'),
+        actions: const [
+          DistinctiveRefreshButton(),
+        ],
+      ),
+      body: bodyContent,
     );
   }
 }

@@ -5,6 +5,24 @@ class AppTheme {
   static const Color royalGold = Color(0xFFD4AF37);
   static const Color bgSurface = Color(0xFFF8F9FA);
 
+  /// هامش سفلي ذكي للنوافذ المنبثقة لتجنب تداخل الأزرار مع شريط التنقل بالهاتف أو لوحة المفاتيح
+  static EdgeInsets modalSheetPadding(
+    BuildContext context, {
+    double horizontal = 16,
+    double top = 20,
+  }) {
+    final mq = MediaQuery.of(context);
+    final bottomInset = mq.viewInsets.bottom > mq.viewPadding.bottom
+        ? mq.viewInsets.bottom
+        : mq.viewPadding.bottom;
+    return EdgeInsets.only(
+      left: horizontal,
+      right: horizontal,
+      top: top,
+      bottom: bottomInset + 24,
+    );
+  }
+
   static ThemeData get lightTheme {
     return ThemeData(
       useMaterial3: true,

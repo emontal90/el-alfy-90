@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:local_auth/local_auth.dart';
 import '../core/app_events.dart';
+import '../core/app_notification.dart';
+import '../core/app_settings_service.dart';
 import '../core/app_theme.dart';
 import 'dashboard_screen.dart';
 import 'waiting_orders_screen.dart';
@@ -30,6 +33,95 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       const UpholstererScreen(),
       ManagementHubScreen(key: _managementHubKey, initialTabIndex: 0),
     ];
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkFirstLaunchBiometricPrompt());
+  }
+
+  Future<void> _checkFirstLaunchBiometricPrompt() async {
+    final alreadyPrompted = await AppSettingsService.wasBiometricPrompted();
+    if (alreadyPrompted) return;
+
+    final alreadyEnabled = await AppSettingsService.isBiometricEnabled();
+    if (alreadyEnabled) {
+      await AppSettingsService.markBiometricPrompted();
+      return;
+    }
+
+    final supported = await AppSettingsService.isBiometricHardwareSupported();
+    if (!supported) {
+      await AppSettingsService.markBiometricPrompted();
+      return;
+    }
+
+    if (!mounted) return;
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dCtx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppTheme.primaryNavy.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.fingerprint_rounded, color: AppTheme.primaryNavy, size: 28),
+            ),
+            const SizedBox(width: 10),
+            const Expanded(
+              child: Text(
+                'تأمين التطبيق بالبصمة',
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: AppTheme.primaryNavy),
+              ),
+            ),
+          ],
+        ),
+        content: const Text(
+          'مرحباً بك! هل ترغب في تفعيل الحماية ببصمة الإصبع عند فتح البرنامج لحماية بيانات المعرض والعملاء؟\n\nيمكنك تعديل هذا الإعداد في أي وقت من صفحة الإعدادات.',
+          style: TextStyle(fontSize: 14, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              await AppSettingsService.markBiometricPrompted();
+              if (dCtx.mounted) Navigator.pop(dCtx);
+            },
+            child: const Text('الإعداد لاحقاً', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+          ),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.primaryNavy,
+              foregroundColor: AppTheme.royalGold,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () async {
+              try {
+                final auth = LocalAuthentication();
+                final didAuth = await auth.authenticate(
+                  localizedReason: 'قم بتأكيد بصمة الإصبع لتفعيل الحماية',
+                  options: const AuthenticationOptions(biometricOnly: false, stickyAuth: true),
+                );
+                if (didAuth) {
+                  await AppSettingsService.setBiometricEnabled(true);
+                  await AppSettingsService.markBiometricPrompted();
+                  if (dCtx.mounted) Navigator.pop(dCtx);
+                  if (mounted) {
+                    AppNotification.showSuccess(context, 'تم تفعيل الدخول بالبصمة بنجاح');
+                  }
+                }
+              } catch (_) {
+                await AppSettingsService.markBiometricPrompted();
+                if (dCtx.mounted) Navigator.pop(dCtx);
+              }
+            },
+            icon: const Icon(Icons.fingerprint_rounded, size: 20),
+            label: const Text('تفعيل البصمة الآن', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
   }
 
   void _handleNavigate(int tabIndex, {int? managementSubTab}) {

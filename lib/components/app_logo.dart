@@ -47,3 +47,63 @@ class AppLogo extends StatelessWidget {
     );
   }
 }
+
+/// عنوان موحد ومتجاوب في الهيدر يعرض الشعار واسم الصفحة كاملاً (ورقم الإصدار اختيارياً) بدون قص على أي هاتف
+class AppBarTitleWithLogo extends StatelessWidget {
+  final String title;
+  final String? subtitle;
+  final double logoSize;
+
+  const AppBarTitleWithLogo({
+    super.key,
+    required this.title,
+    this.subtitle,
+    this.logoSize = 34,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        AppLogo(size: logoSize),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: AlignmentDirectional.centerStart,
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                    color: AppTheme.primaryNavy,
+                  ),
+                  maxLines: 1,
+                ),
+              ),
+              if (subtitle != null)
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: AlignmentDirectional.centerStart,
+                  child: Text(
+                    subtitle!,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.primaryNavy.withValues(alpha: 0.68),
+                    ),
+                    maxLines: 1,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+

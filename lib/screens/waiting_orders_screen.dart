@@ -95,17 +95,13 @@ class _WaitingOrdersScreenState extends State<WaitingOrdersScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setModalState) => Padding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
-            left: 16,
-            right: 16,
-            top: 20,
-          ),
+          padding: AppTheme.modalSheetPadding(ctx),
           child: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -510,18 +506,7 @@ class _WaitingOrdersScreenState extends State<WaitingOrdersScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Row(
-          children: [
-            AppLogo(size: 34),
-            SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                'قائمة الانتظار (مرتبطة بموعد التسليم)',
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
+        title: const AppBarTitleWithLogo(title: 'قائمة الانتظار (مرتبطة بموعد التسليم)'),
         actions: const [
           DistinctiveRefreshButton(),
         ],

@@ -1,14 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:sqflite/sqflite.dart';
 import '../components/app_logo.dart';
-import '../components/distinctive_refresh_button.dart';
 import '../components/stat_card.dart';
 import '../core/app_events.dart';
 import '../core/app_theme.dart';
 import '../core/app_version.dart';
-import '../core/backup_service.dart';
 import '../core/db_helper.dart';
-import 'backup_screen.dart';
+import 'settings_hub_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   final void Function(int tabIndex, {int? managementSubTab})? onNavigateTab;
@@ -88,50 +86,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Row(
-          children: [
-            const AppLogo(size: 38),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text(
-                    'لوحة التحكم والتقارير',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  Text(
-                    'الإصدار ${AppVersion.displayVersion}',
-                    style: TextStyle(
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.w500,
-                      color: AppTheme.primaryNavy.withValues(alpha: 0.65),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+        title: AppBarTitleWithLogo(
+          title: 'لوحة التحكم والتقارير',
+          subtitle: 'الإصدار ${AppVersion.displayVersion}',
+          logoSize: 36,
         ),
         actions: [
-          const DistinctiveRefreshButton(),
           IconButton(
-            tooltip: 'تنظيف الكاش وتسريع البرنامج',
-            icon: const Icon(Icons.cleaning_services_rounded),
-            onPressed: () async {
-              final msg = await BackupService.clearAppCache();
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
-              }
-            },
+            tooltip: 'الإعدادات',
+            icon: const Icon(Icons.settings_rounded, color: AppTheme.primaryNavy, size: 26),
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const SettingsHubScreen()),
+            ).then((_) => _loadStats()),
           ),
-          IconButton(
-            tooltip: 'النسخ الاحتياطي',
-            icon: const Icon(Icons.backup_rounded),
-            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BackupScreen())).then((_) => _loadStats()),
-          ),
+          const SizedBox(width: 4),
         ],
       ),
       body: RefreshIndicator(
@@ -254,6 +223,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
               ],
             ),
+            const SizedBox(height: 76),
           ],
         ),
       ),

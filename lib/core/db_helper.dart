@@ -73,6 +73,14 @@ class DBHelper {
           )
         ''');
       } catch (_) {}
+      try {
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS app_settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+          )
+        ''');
+      } catch (_) {}
 
       try {
         // تسوية وتصفير قطع أي صنف رصيد أطقمه صفر
@@ -191,6 +199,13 @@ class DBHelper {
         stock_after INTEGER NOT NULL,
         notes TEXT,
         created_at TEXT NOT NULL
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS app_settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
       )
     ''');
   }

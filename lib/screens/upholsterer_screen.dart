@@ -233,6 +233,7 @@ class _UpholstererScreenState extends State<UpholstererScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -252,12 +253,7 @@ class _UpholstererScreenState extends State<UpholstererScreen> {
           }
 
           return Padding(
-            padding: EdgeInsets.only(
-              bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
-              left: 16,
-              right: 16,
-              top: 20,
-            ),
+            padding: AppTheme.modalSheetPadding(ctx),
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -682,6 +678,7 @@ class _UpholstererScreenState extends State<UpholstererScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -716,12 +713,7 @@ class _UpholstererScreenState extends State<UpholstererScreen> {
           }
 
           return Padding(
-            padding: EdgeInsets.only(
-              bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
-              left: 16,
-              right: 16,
-              top: 20,
-            ),
+            padding: AppTheme.modalSheetPadding(ctx),
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -1354,18 +1346,7 @@ class _UpholstererScreenState extends State<UpholstererScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Row(
-          children: [
-            AppLogo(size: 34),
-            SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                'الأصناف لدى المنجد',
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
+        title: const AppBarTitleWithLogo(title: 'الأصناف لدى المنجد'),
         actions: const [
           DistinctiveRefreshButton(),
         ],
