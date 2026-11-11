@@ -52,10 +52,17 @@ jobs:
           KEYSTORE_PATH="$RUNNER_TEMP/el-alfy-release.jks"
           printf '%s' "$KEYSTORE_BASE64" | tr -d '\r\n ' | base64 --decode > "$KEYSTORE_PATH"
           chmod 600 "$KEYSTORE_PATH"
+          CLEAN_STORE_PASS=$(printf '%s' "$KEYSTORE_PASSWORD" | tr -d '\r\n')
+          CLEAN_KEY_PASS=$(printf '%s' "$KEY_PASSWORD" | tr -d '\r\n')
+          CLEAN_ALIAS=$(printf '%s' "$KEY_ALIAS" | tr -d '\r\n')
+          if ! keytool -list -keystore "$KEYSTORE_PATH" -storepass "$CLEAN_STORE_PASS" -alias "$CLEAN_ALIAS" >/dev/null 2>&1; then
+            echo "::error::Failed to verify keystore with KEYSTORE_PASSWORD and KEY_ALIAS. Check GitHub Secrets formatting."
+            exit 1
+          fi
           cat > android/key.properties <<EOF
-          storePassword=$KEYSTORE_PASSWORD
-          keyPassword=$KEY_PASSWORD
-          keyAlias=$KEY_ALIAS
+          storePassword=$CLEAN_STORE_PASS
+          keyPassword=$CLEAN_KEY_PASS
+          keyAlias=$CLEAN_ALIAS
           storeFile=$KEYSTORE_PATH
           EOF
           chmod 600 android/key.properties
