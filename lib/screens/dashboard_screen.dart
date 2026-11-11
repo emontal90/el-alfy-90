@@ -86,9 +86,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: AppBarTitleWithLogo(
+        title: const AppBarTitleWithLogo(
           title: 'لوحة التحكم والتقارير',
-          subtitle: 'الإصدار ${AppVersion.displayVersion}',
           logoSize: 36,
         ),
         actions: [
@@ -106,9 +105,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
       body: RefreshIndicator(
         onRefresh: _loadStats,
         child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.all(16),
           children: [
-            // بنر الترحيب المدمج بالشعار وبدون الملاحظة لتوفير المساحة
+            // بنر الترحيب المدمج بالشعار ورقم الإصدار
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
@@ -133,15 +133,44 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Text(
-                          'مرحباً بك في نظام إدارة معرضك',
-                          style: TextStyle(
-                            color: AppTheme.royalGold,
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
+                        Row(
+                          children: [
+                            const Flexible(
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: AlignmentDirectional.centerStart,
+                                child: Text(
+                                  'مرحباً بك في نظام إدارة معرضك',
+                                  style: TextStyle(
+                                    color: AppTheme.royalGold,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: AppTheme.royalGold.withValues(alpha: 0.18),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: AppTheme.royalGold.withValues(alpha: 0.45),
+                                ),
+                              ),
+                              child: Text(
+                                AppVersion.displayVersion,
+                                style: const TextStyle(
+                                  color: AppTheme.royalGold,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 2),
+                        const SizedBox(height: 3),
                         Text(
                           'نظام الألفي لإدارة الأثاث والمخازن والطلبيات',
                           style: TextStyle(

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../../components/app_logo.dart';
-import '../../components/distinctive_refresh_button.dart';
 import 'customers_tab.dart';
 import 'categories_tab.dart';
 import 'showroom_stock_tab.dart';
@@ -52,9 +51,6 @@ class ManagementHubScreenState extends State<ManagementHubScreen>
     return Scaffold(
       appBar: AppBar(
         title: const AppBarTitleWithLogo(title: 'إدارة المخزن والأصناف والعملاء'),
-        actions: const [
-          DistinctiveRefreshButton(),
-        ],
         bottom: TabBar(
           controller: tabController,
           tabs: const [

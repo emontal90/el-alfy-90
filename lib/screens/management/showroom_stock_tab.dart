@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import '../../components/refreshable_empty_view.dart';
 import '../../core/app_events.dart';
 import '../../core/app_notification.dart';
 import '../../core/app_theme.dart';
@@ -890,19 +891,22 @@ class _ShowroomStockTabState extends State<ShowroomStockTab> {
   // ---------------------------------------------------------------------------
   @override
   Widget build(BuildContext context) {
-    return _categories.isEmpty
-        ? const Center(
-            child: Padding(
-              padding: EdgeInsets.all(24.0),
-              child: Text(
-                'لا توجد أصناف في المخزن حالياً.\nيمكنك إضافة الأصناف من تبويب (الأصناف ومكوناتها).',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey, fontSize: 16),
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: _categories.isEmpty
+          ? const RefreshableEmptyView(
+              child: Padding(
+                padding: EdgeInsets.all(24.0),
+                child: Text(
+                  'لا توجد أصناف في المخزن حالياً.\nيمكنك إضافة الأصناف من تبويب (الأصناف ومكوناتها).',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.grey, fontSize: 16),
+                ),
               ),
-            ),
-          )
-        : ListView.builder(
-            padding: const EdgeInsets.only(left: 12, right: 12, top: 12, bottom: 80),
+            )
+          : ListView.builder(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.only(left: 12, right: 12, top: 12, bottom: 80),
             itemCount: _categories.length,
             itemBuilder: (ctx, i) {
               final cat = _categories[i];
@@ -1237,6 +1241,7 @@ class _ShowroomStockTabState extends State<ShowroomStockTab> {
                 ),
               );
             },
-          );
+          ),
+    );
   }
 }

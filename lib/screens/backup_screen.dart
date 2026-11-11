@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart' as intl;
 import 'package:path/path.dart' as p;
 import '../components/app_logo.dart';
-import '../components/distinctive_refresh_button.dart';
 import '../core/app_events.dart';
 import '../core/app_notification.dart';
 import '../core/app_theme.dart';
@@ -295,8 +294,11 @@ class _BackupScreenState extends State<BackupScreen> {
       top: false,
       child: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : ListView(
-              padding: const EdgeInsets.all(16),
+          : RefreshIndicator(
+              onRefresh: _loadAllInfo,
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(16),
               children: [
                 // 1. بطاقات الإحصائيات والمعلومات السريعة
                 Row(
@@ -680,6 +682,7 @@ class _BackupScreenState extends State<BackupScreen> {
                 const SizedBox(height: 30),
               ],
             ),
+            ),
     );
 
     if (widget.embedded) {
@@ -689,9 +692,6 @@ class _BackupScreenState extends State<BackupScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const AppBarTitleWithLogo(title: 'النسخ الاحتياطي والأرشفة الذكية'),
-        actions: const [
-          DistinctiveRefreshButton(),
-        ],
       ),
       body: bodyContent,
     );

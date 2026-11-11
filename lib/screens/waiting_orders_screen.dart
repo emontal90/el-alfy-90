@@ -3,8 +3,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart' as intl;
 import '../components/app_logo.dart';
-import '../components/distinctive_refresh_button.dart';
 import '../components/order_card.dart';
+import '../components/refreshable_empty_view.dart';
 import '../core/app_events.dart';
 import '../core/app_notification.dart';
 import '../core/app_theme.dart';
@@ -507,9 +507,6 @@ class _WaitingOrdersScreenState extends State<WaitingOrdersScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const AppBarTitleWithLogo(title: 'قائمة الانتظار (مرتبطة بموعد التسليم)'),
-        actions: const [
-          DistinctiveRefreshButton(),
-        ],
       ),
       body: Column(
         children: [
@@ -655,19 +652,30 @@ class _WaitingOrdersScreenState extends State<WaitingOrdersScreen> {
             ),
           ),
           Expanded(
-            child: list.isEmpty
-                ? const Center(
-                    child: Text('لا توجد أوردرات مطابقة في قائمة الانتظار.'))
-                : ListView.builder(
-                    padding: const EdgeInsets.only(
-                        left: 12, right: 12, top: 12, bottom: 80),
-                    itemCount: list.length,
-                    itemBuilder: (ctx, i) => OrderCard(
-                      order: list[i],
-                      onEditPressed: () => _openEditOrderModal(list[i]),
-                      onDeliverPressed: () => _confirmAndDeliverOrder(list[i]),
+            child: RefreshIndicator(
+              onRefresh: _loadOrders,
+              child: list.isEmpty
+                  ? const RefreshableEmptyView(
+                      child: Padding(
+                        padding: EdgeInsets.all(24.0),
+                        child: Text(
+                          'لا توجد أوردرات مطابقة في قائمة الانتظار.',
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    )
+                  : ListView.builder(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.only(
+                          left: 12, right: 12, top: 12, bottom: 80),
+                      itemCount: list.length,
+                      itemBuilder: (ctx, i) => OrderCard(
+                        order: list[i],
+                        onEditPressed: () => _openEditOrderModal(list[i]),
+                        onDeliverPressed: () => _confirmAndDeliverOrder(list[i]),
+                      ),
                     ),
-                  ),
+            ),
           ),
         ],
       ),

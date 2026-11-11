@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart' as intl;
 import '../components/app_logo.dart';
-import '../components/distinctive_refresh_button.dart';
 import '../components/order_card.dart';
+import '../components/refreshable_empty_view.dart';
 import '../core/app_events.dart';
 import '../core/app_theme.dart';
 import '../core/db_helper.dart';
@@ -189,9 +189,6 @@ class _DeliveredOrdersScreenState extends State<DeliveredOrdersScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const AppBarTitleWithLogo(title: 'سجل الأوردرات التي تم تسليمها'),
-        actions: const [
-          DistinctiveRefreshButton(),
-        ],
       ),
       body: Column(
         children: [
@@ -369,38 +366,42 @@ class _DeliveredOrdersScreenState extends State<DeliveredOrdersScreen> {
 
           // قائمة الأوردرات المسلّمة
           Expanded(
-            child: list.isEmpty
-                ? Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24.0),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            hasActiveFilter ? Icons.search_off : Icons.inventory_2_outlined,
-                            size: 50,
-                            color: Colors.grey.shade400,
-                          ),
-                          const SizedBox(height: 12),
-                          Text(
-                            hasActiveFilter
-                                ? 'لا توجد أوردرات مسلّمة مطابقة للتاريخ والبحث المحددين.'
-                                : 'لم يتم تسليم أي أوردر بعد.',
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(color: Colors.grey, fontSize: 15),
-                          ),
-                        ],
+            child: RefreshIndicator(
+              onRefresh: _load,
+              child: list.isEmpty
+                  ? RefreshableEmptyView(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24.0),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              hasActiveFilter ? Icons.search_off : Icons.inventory_2_outlined,
+                              size: 50,
+                              color: Colors.grey.shade400,
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              hasActiveFilter
+                                  ? 'لا توجد أوردرات مسلّمة مطابقة للتاريخ والبحث المحددين.'
+                                  : 'لم يتم تسليم أي أوردر بعد.',
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(color: Colors.grey, fontSize: 15),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  : ListView.builder(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.all(12),
+                      itemCount: list.length,
+                      itemBuilder: (ctx, i) => OrderCard(
+                        order: list[i],
+                        isDelivered: true,
                       ),
                     ),
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.all(12),
-                    itemCount: list.length,
-                    itemBuilder: (ctx, i) => OrderCard(
-                      order: list[i],
-                      isDelivered: true,
-                    ),
-                  ),
+            ),
           ),
         ],
       ),

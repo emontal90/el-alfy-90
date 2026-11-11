@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../components/refreshable_empty_view.dart';
 import '../../core/app_events.dart';
 import '../../core/app_notification.dart';
 import '../../core/app_theme.dart';
@@ -297,19 +298,22 @@ class _CustomersTabState extends State<CustomersTab> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: _customers.isEmpty
-          ? const Center(
-              child: Padding(
-                padding: EdgeInsets.all(24.0),
-                child: Text(
-                  'لا يوجد عملاء مسجلين حالياً.\nاضغط على (إضافة عميل) لإضافة أول عميل.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.grey, fontSize: 16),
+      body: RefreshIndicator(
+        onRefresh: _load,
+        child: _customers.isEmpty
+            ? const RefreshableEmptyView(
+                child: Padding(
+                  padding: EdgeInsets.all(24.0),
+                  child: Text(
+                    'لا يوجد عملاء مسجلين حالياً.\nاضغط على (إضافة عميل) لإضافة أول عميل.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.grey, fontSize: 16),
+                  ),
                 ),
-              ),
-            )
-          : ListView.builder(
-              padding: const EdgeInsets.only(left: 12, right: 12, top: 12, bottom: 80),
+              )
+            : ListView.builder(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.only(left: 12, right: 12, top: 12, bottom: 80),
               itemCount: _customers.length,
               itemBuilder: (ctx, i) {
                 final c = _customers[i];
@@ -343,6 +347,7 @@ class _CustomersTabState extends State<CustomersTab> {
                 );
               },
             ),
+      ),
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: AppTheme.primaryNavy,
         foregroundColor: AppTheme.royalGold,

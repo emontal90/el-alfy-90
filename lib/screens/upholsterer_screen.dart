@@ -3,7 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart' as intl;
 import '../components/app_logo.dart';
-import '../components/distinctive_refresh_button.dart';
+import '../components/refreshable_empty_view.dart';
 import '../core/app_events.dart';
 import '../core/app_notification.dart';
 import '../core/app_theme.dart';
@@ -1347,9 +1347,6 @@ class _UpholstererScreenState extends State<UpholstererScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const AppBarTitleWithLogo(title: 'الأصناف لدى المنجد'),
-        actions: const [
-          DistinctiveRefreshButton(),
-        ],
       ),
       body: Column(
         children: [
@@ -1487,32 +1484,35 @@ class _UpholstererScreenState extends State<UpholstererScreen> {
 
           // قائمة الدفعات
           Expanded(
-            child: list.isEmpty
-                ? Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24.0),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            hasActiveFilter ? Icons.search_off : Icons.handyman_outlined,
-                            size: 54,
-                            color: Colors.grey.shade400,
-                          ),
-                          const SizedBox(height: 12),
-                          Text(
-                            hasActiveFilter
-                                ? 'لا توجد دفعات مطابقة لخيارات البحث المحددة.'
-                                : 'لا توجد قطع لدى المنجد حالياً.\nاضغط على (تسليم للمنجد) بالأسفل لتسجيل دفعة جديدة.',
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(color: Colors.grey, fontSize: 15),
-                          ),
-                        ],
+            child: RefreshIndicator(
+              onRefresh: _load,
+              child: list.isEmpty
+                  ? RefreshableEmptyView(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24.0),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              hasActiveFilter ? Icons.search_off : Icons.handyman_outlined,
+                              size: 54,
+                              color: Colors.grey.shade400,
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              hasActiveFilter
+                                  ? 'لا توجد دفعات مطابقة لخيارات البحث المحددة.'
+                                  : 'لا توجد قطع لدى المنجد حالياً.\nاضغط على (تسليم للمنجد) بالأسفل لتسجيل دفعة جديدة.',
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(color: Colors.grey, fontSize: 15),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.only(left: 12, right: 12, top: 12, bottom: 85),
+                    )
+                  : ListView.builder(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.only(left: 12, right: 12, top: 12, bottom: 85),
                     itemCount: list.length,
                     itemBuilder: (ctx, i) {
                       final b = list[i];
@@ -1969,6 +1969,7 @@ class _UpholstererScreenState extends State<UpholstererScreen> {
                       );
                     },
                   ),
+            ),
           ),
         ],
       ),
