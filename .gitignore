@@ -46,3 +46,7 @@ build/
 # Exceptions to above rules.
 !/packages/flutter_tools/test/data/dart_dependencies_test/**/.packages
 
+# Generated local APKs inside project releases folder
+releases/*.apk
+
+

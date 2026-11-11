@@ -1,62 +1,60 @@
 @echo off
-title Furniture ERP - Run and Build
+chcp 65001 >nul
+cd /d "%~dp0"
+title El-Alfy ERP - Auto Build APK
 
 if exist "D:\flutter\bin" set "PATH=D:\flutter\bin;%PATH%"
 if exist "C:\flutter\bin" set "PATH=C:\flutter\bin;%PATH%"
-if exist "%USERPROFILE%\Desktop\flutter\bin" set "PATH=%USERPROFILE%\Desktop\flutter\bin;%PATH%"
-if exist "C:\Users\Ayman\Desktop\flutter\bin" set "PATH=C:\Users\Ayman\Desktop\flutter\bin;%PATH%"
-if exist "%USERPROFILE%\flutter\bin" set "PATH=%USERPROFILE%\flutter\bin;%PATH%"
-if exist "%LOCALAPPDATA%\flutter\bin" set "PATH=%LOCALAPPDATA%\flutter\bin;%PATH%"
+if exist "C:\Program Files\Microsoft\jdk-17.0.21.21-hotspot" set "JAVA_HOME=C:\Program Files\Microsoft\jdk-17.0.21.21-hotspot"
+if exist "%JAVA_HOME%\bin" set "PATH=%JAVA_HOME%\bin;%PATH%"
+if exist "D:\Android\Sdk" set "ANDROID_HOME=D:\Android\Sdk"
 
 where flutter >nul 2>nul
 if errorlevel 1 (
-    echo ====================================================================
-    echo [ERROR] Flutter engine not found at D:\flutter\bin or in system PATH.
-    echo Please ensure Flutter is installed at D:\flutter
-    echo or add its bin directory to your Windows PATH environment variable.
-    echo ====================================================================
-    echo.
+    echo [ERROR] Flutter not found at D:\flutter\bin or in PATH.
     pause
     exit /b 1
 )
 
+:: Extract current version from pubspec.yaml
+for /f "tokens=2 delims=: " %%a in ('findstr /b "version:" pubspec.yaml') do set "FULL_VER=%%a"
+for /f "tokens=1 delims=+" %%v in ("%FULL_VER%") do set "APP_VER=%%v"
+if "%APP_VER%"=="" set "APP_VER=1.0.0"
+
 echo ====================================================================
-echo                   Furniture ERP System
-echo                    Run and Build Tool
+echo            El-Alfy ERP - Automatic APK Builder (v%APP_VER%)
 echo ====================================================================
 echo.
-echo Flutter location:
-where flutter
-echo.
-echo Fetching and updating project packages...
+echo [1/3] Fetching packages...
 call flutter pub get
-echo.
-echo ====================================================================
-echo Select an option:
-echo.
-echo [1] Run application locally (Default device / emulator)
-echo [2] Build release APK for Android
-echo ====================================================================
-echo.
-choice /c 12 /n /m "Select an option [1 or 2]: "
-if errorlevel 2 goto :BUILD_APK
-if errorlevel 1 goto :RUN_LOCAL
+if errorlevel 1 (
+    echo [ERROR] flutter pub get failed.
+    pause
+    exit /b 1
+)
 
-:RUN_LOCAL
 echo.
-echo Starting application locally...
-call flutter run
-goto :END
-
-:BUILD_APK
-echo.
-echo ====================================================================
-echo Building release APK for Android...
-echo Note: This requires Android SDK / Android Studio to be installed.
-echo ====================================================================
+echo [2/3] Building Release APK...
 call flutter build apk --release
-goto :END
+if errorlevel 1 (
+    echo [ERROR] APK build failed!
+    pause
+    exit /b 1
+)
 
-:END
 echo.
+echo [3/3] Saving APK inside project folder (releases\)...
+if not exist "releases" mkdir "releases"
+copy /Y "build\app\outputs\flutter-apk\app-release.apk" "releases\el-Alfy-v%APP_VER%.apk" >nul
+copy /Y "build\app\outputs\flutter-apk\app-release.apk" "releases\el-Alfy-latest.apk" >nul
+
+echo.
+echo ====================================================================
+echo [SUCCESS] APK Built Successfully!
+echo Saved inside project folder:
+echo   %cd%\releases\el-Alfy-v%APP_VER%.apk
+echo   %cd%\releases\el-Alfy-latest.apk
+echo ====================================================================
+echo.
+explorer "releases"
 pause

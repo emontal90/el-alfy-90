@@ -5,6 +5,7 @@ import '../components/distinctive_refresh_button.dart';
 import '../components/stat_card.dart';
 import '../core/app_events.dart';
 import '../core/app_theme.dart';
+import '../core/app_version.dart';
 import '../core/backup_service.dart';
 import '../core/db_helper.dart';
 import 'backup_screen.dart';
@@ -87,11 +88,31 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Row(
+        title: Row(
           children: [
-            AppLogo(size: 38),
-            SizedBox(width: 12),
-            Text('لوحة التحكم والتقارير', style: TextStyle(fontWeight: FontWeight.bold)),
+            const AppLogo(size: 38),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'لوحة التحكم والتقارير',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    'الإصدار ${AppVersion.displayVersion}',
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w500,
+                      color: AppTheme.primaryNavy.withValues(alpha: 0.65),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
         actions: [
