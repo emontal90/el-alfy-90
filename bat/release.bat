@@ -41,45 +41,20 @@ echo             El-Alfy ERP - Automatic Release Manager
 echo             Current Version: v%CUR_VER%
 echo ====================================================================
 echo.
-echo Select version update type:
-echo   [1] Patch  (e.g. 1.0.16 -^> 1.0.17)
-echo   [2] Minor  (e.g. 1.0.16 -^> 1.1.0)
-echo   [3] Major  (e.g. 1.0.16 -^> 2.0.0)
-echo   [4] Custom (Enter version manually)
-echo   [0] Cancel and Exit
-echo.
-choice /c 12340 /n /m "Select [1, 2, 3, 4, or 0]: "
-set "SEL=%errorlevel%"
 
-if "%SEL%"=="5" goto :CANCEL
-if "%SEL%"=="4" goto :VER_CUSTOM
-if "%SEL%"=="3" goto :VER_MAJOR
-if "%SEL%"=="2" goto :VER_MINOR
-if "%SEL%"=="1" goto :VER_PATCH
-goto :CANCEL
+set "BUMP_MODE=patch"
+if not "%~1"=="" set "BUMP_MODE=%~1"
 
-:VER_CUSTOM
-set "CUSTOM_VER="
-set /p "CUSTOM_VER=Enter new version (e.g. 1.2.0): "
-if "%CUSTOM_VER%"=="" goto :FAIL
 set "NEW_VER="
-for /f "usebackq delims=" %%i in (`python scripts\bump_version.py custom %CUSTOM_VER%`) do set "NEW_VER=%%i"
-goto :CHECK_VER
-
-:VER_MAJOR
-set "NEW_VER="
-for /f "usebackq delims=" %%i in (`python scripts\bump_version.py major`) do set "NEW_VER=%%i"
-goto :CHECK_VER
-
-:VER_MINOR
-set "NEW_VER="
-for /f "usebackq delims=" %%i in (`python scripts\bump_version.py minor`) do set "NEW_VER=%%i"
-goto :CHECK_VER
-
-:VER_PATCH
-set "NEW_VER="
-for /f "usebackq delims=" %%i in (`python scripts\bump_version.py patch`) do set "NEW_VER=%%i"
-goto :CHECK_VER
+if /i "%BUMP_MODE%"=="custom" (
+    if "%~2"=="" (
+        echo [ERROR] Custom version requires second argument ^(e.g. release.bat custom 1.2.0^)
+        goto :FAIL
+    )
+    for /f "usebackq delims=" %%i in (`python scripts\bump_version.py custom %~2`) do set "NEW_VER=%%i"
+) else (
+    for /f "usebackq delims=" %%i in (`python scripts\bump_version.py %BUMP_MODE%`) do set "NEW_VER=%%i"
+)
 
 :CHECK_VER
 if "%NEW_VER%"=="" (
