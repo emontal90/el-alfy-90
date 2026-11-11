@@ -1,6 +1,6 @@
 @echo off
 setlocal enableextensions
-cd /d "%~dp0"
+cd /d "%~dp0.."
 title El-Alfy ERP - Auto Release
 
 if exist "D:\flutter\bin" set "PATH=D:\flutter\bin;%PATH%"

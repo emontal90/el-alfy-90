@@ -1,6 +1,6 @@
 @echo off
 chcp 65001 >nul
-cd /d "%~dp0"
+cd /d "%~dp0.."
 title El-Alfy ERP - Auto Build APK
 
 if exist "D:\flutter\bin" set "PATH=D:\flutter\bin;%PATH%"

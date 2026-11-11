@@ -1,4 +1,5 @@
 @echo off
+cd /d "%~dp0.."
 title Furniture ERP - Local Runner
 
 if exist "D:\flutter\bin" set "PATH=D:\flutter\bin;%PATH%"
