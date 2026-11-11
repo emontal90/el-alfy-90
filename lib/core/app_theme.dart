@@ -37,6 +37,22 @@ class AppTheme {
         margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
+      navigationBarTheme: NavigationBarThemeData(
+        height: 68,
+        iconTheme: const WidgetStatePropertyAll(IconThemeData(size: 22)),
+        labelTextStyle: WidgetStateProperty.resolveWith((states) {
+          final isSelected = states.contains(WidgetState.selected);
+          return TextStyle(
+            fontSize: 11,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+            color: isSelected ? primaryNavy : Colors.grey.shade800,
+            overflow: TextOverflow.ellipsis,
+          );
+        }),
+      ),
+      tabBarTheme: const TabBarThemeData(
+        labelPadding: EdgeInsets.symmetric(horizontal: 6),
+      ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: Colors.white,

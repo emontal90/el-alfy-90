@@ -18,6 +18,7 @@ class StatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isCompact = MediaQuery.sizeOf(context).width < 380;
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(
@@ -30,7 +31,10 @@ class StatCard extends StatelessWidget {
         splashColor: color.withValues(alpha: 0.12),
         highlightColor: color.withValues(alpha: 0.06),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 12.0),
+          padding: EdgeInsets.symmetric(
+            horizontal: isCompact ? 10.0 : 13.0,
+            vertical: isCompact ? 10.0 : 12.0,
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -40,38 +44,40 @@ class StatCard extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(7),
+                    padding: EdgeInsets.all(isCompact ? 5.5 : 7),
                     decoration: BoxDecoration(
                       color: color.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: Icon(icon, color: color, size: 22),
+                    child: Icon(icon, color: color, size: isCompact ? 18 : 22),
                   ),
+                  const SizedBox(width: 6),
                   Flexible(
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: EdgeInsets.symmetric(horizontal: isCompact ? 6 : 8, vertical: 4),
                       decoration: BoxDecoration(
                         color: color.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(color: color.withValues(alpha: 0.25)),
                       ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Flexible(
-                            child: Text(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
                               title,
+                              maxLines: 1,
                               style: TextStyle(
                                 color: color,
-                                fontSize: 11,
+                                fontSize: isCompact ? 10.5 : 11,
                                 fontWeight: FontWeight.bold,
                               ),
-                              overflow: TextOverflow.ellipsis,
                             ),
-                          ),
-                          const SizedBox(width: 4),
-                          Icon(Icons.arrow_forward_ios_rounded, size: 9, color: color),
-                        ],
+                            const SizedBox(width: 3),
+                            Icon(Icons.arrow_forward_ios_rounded, size: 9, color: color),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -81,12 +87,17 @@ class StatCard extends StatelessWidget {
               // القيمة والبيان الرئيسي للرقم
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 2),
-                child: Text(
-                  value,
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w900,
-                    color: color,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: AlignmentDirectional.centerStart,
+                  child: Text(
+                    value,
+                    maxLines: 1,
+                    style: TextStyle(
+                      fontSize: isCompact ? 16.5 : 18,
+                      fontWeight: FontWeight.w900,
+                      color: color,
+                    ),
                   ),
                 ),
               ),
@@ -94,12 +105,16 @@ class StatCard extends StatelessWidget {
               // مؤشر تفاعلي للتنقل السريع
               Row(
                 children: [
-                  Text(
-                    'اضغط لفتح القائمة',
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: Colors.grey.shade600,
-                      fontWeight: FontWeight.w500,
+                  Flexible(
+                    child: Text(
+                      'اضغط لفتح القائمة',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: Colors.grey.shade600,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 3),
@@ -136,6 +151,7 @@ class SplitStatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final total = standardCount + customCount;
+    final isCompact = MediaQuery.sizeOf(context).width < 380;
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(
@@ -148,7 +164,10 @@ class SplitStatCard extends StatelessWidget {
         splashColor: color.withValues(alpha: 0.12),
         highlightColor: color.withValues(alpha: 0.06),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 10.0),
+          padding: EdgeInsets.symmetric(
+            horizontal: isCompact ? 9.0 : 12.0,
+            vertical: isCompact ? 9.0 : 10.0,
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -158,38 +177,40 @@ class SplitStatCard extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(6),
+                    padding: EdgeInsets.all(isCompact ? 5 : 6),
                     decoration: BoxDecoration(
                       color: color.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: Icon(icon, color: color, size: 20),
+                    child: Icon(icon, color: color, size: isCompact ? 17 : 20),
                   ),
+                  const SizedBox(width: 6),
                   Flexible(
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      padding: EdgeInsets.symmetric(horizontal: isCompact ? 6 : 8, vertical: 3),
                       decoration: BoxDecoration(
                         color: color.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(color: color.withValues(alpha: 0.25)),
                       ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Flexible(
-                            child: Text(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
                               title,
+                              maxLines: 1,
                               style: TextStyle(
                                 color: color,
-                                fontSize: 11,
+                                fontSize: isCompact ? 10.5 : 11,
                                 fontWeight: FontWeight.bold,
                               ),
-                              overflow: TextOverflow.ellipsis,
                             ),
-                          ),
-                          const SizedBox(width: 4),
-                          Icon(Icons.arrow_forward_ios_rounded, size: 9, color: color),
-                        ],
+                            const SizedBox(width: 3),
+                            Icon(Icons.arrow_forward_ios_rounded, size: 9, color: color),
+                          ],
+                        ),
                       ),
                     ),
                   ),

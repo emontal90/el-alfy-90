@@ -693,15 +693,19 @@ class _BackupScreenState extends State<BackupScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Row(
-                      children: [
-                        Icon(Icons.folder_shared_rounded, color: AppTheme.primaryNavy, size: 22),
-                        SizedBox(width: 8),
-                        Text(
-                          'سجل النسخ الاحتياطية على الموبايل والكمبيوتر',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.primaryNavy),
-                        ),
-                      ],
+                    const Expanded(
+                      child: Row(
+                        children: [
+                          Icon(Icons.folder_shared_rounded, color: AppTheme.primaryNavy, size: 22),
+                          SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'سجل النسخ الاحتياطية على الموبايل والكمبيوتر',
+                              style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.bold, color: AppTheme.primaryNavy),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                     IconButton(
                       tooltip: 'تحديث القائمة',

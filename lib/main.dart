@@ -45,6 +45,23 @@ class FurnitureApp extends StatelessWidget {
         GlobalCupertinoLocalizations.delegate,
       ],
       theme: AppTheme.lightTheme,
+      builder: (context, child) {
+        if (child == null) return const SizedBox.shrink();
+        final mq = MediaQuery.of(context);
+        final width = mq.size.width;
+        // ضبط قياس الخط والأيقونات تلقائياً حسب عرض الشاشة مع وضع سقف آمن لتكبير خط الهاتف
+        final double screenScale = width < 390 ? (width / 390.0).clamp(0.84, 1.0) : 1.0;
+        final double systemTextScale = mq.textScaler.scale(1.0).clamp(0.90, 1.05);
+        final double effectiveTextScale = (systemTextScale * screenScale).clamp(0.82, 1.05);
+
+        return MediaQuery(
+          data: mq.copyWith(textScaler: TextScaler.linear(effectiveTextScale)),
+          child: IconTheme.merge(
+            data: IconThemeData(size: 23.0 * screenScale.clamp(0.86, 1.0)),
+            child: child,
+          ),
+        );
+      },
       home: initialBiometricEnabled ? const AuthScreen() : const MainNavigationScreen(),
     );
   }

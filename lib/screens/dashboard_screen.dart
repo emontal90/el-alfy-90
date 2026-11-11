@@ -193,7 +193,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               physics: const NeverScrollableScrollPhysics(),
               mainAxisSpacing: 12,
               crossAxisSpacing: 12,
-              childAspectRatio: 1.15,
+              childAspectRatio: MediaQuery.sizeOf(context).width < 380 ? 1.05 : 1.15,
               children: [
                 // 1. كارت قائمة الانتظار مقسوم إلى نصفين: نمطي وأوردر
                 SplitStatCard(

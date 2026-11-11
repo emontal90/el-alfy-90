@@ -1097,6 +1097,7 @@ class _ShowroomStockTabState extends State<ShowroomStockTab> {
                                           completeSets > 0
                                               ? 'جاهز ($completeSets طقم ${individualPiecesCount > 0 ? "+ $individualPiecesCount فردي" : ""})'
                                               : (individualPiecesCount > 0 ? 'قطع فردية فقط ($individualPiecesCount قطعة)' : 'رصيد الأطقم: صفر'),
+                                          maxLines: 2,
                                           style: TextStyle(
                                             fontSize: 11,
                                             fontWeight: FontWeight.bold,
@@ -1114,7 +1115,9 @@ class _ShowroomStockTabState extends State<ShowroomStockTab> {
 
                           // زر حذف الصنف
                           IconButton(
-                            icon: Icon(Icons.delete_outline, color: Colors.red.shade400, size: 22),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
+                            icon: Icon(Icons.delete_outline, color: Colors.red.shade400, size: 21),
                             tooltip: 'حذف الصنف من المخزن',
                             onPressed: () => _confirmDeleteCategory(context, cat),
                           ),
@@ -1126,15 +1129,24 @@ class _ShowroomStockTabState extends State<ShowroomStockTab> {
 
                       // الصف الثاني: عرض قطع الطقم بالمخزن بشكل لائق ومميز
                       Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text(
-                            'قطع الطقم ورصيدها الفعلي بالمخزن:',
-                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppTheme.primaryNavy),
+                          const Expanded(
+                            child: Text(
+                              'قطع الطقم ورصيدها الفعلي بالمخزن:',
+                              style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: AppTheme.primaryNavy),
+                            ),
                           ),
-                          Text(
-                            'إجمالي القطع: ${comps.fold<int>(0, (sum, c) => sum + ((c['qty'] as int?) ?? 0))} قطعة',
-                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.brown),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.brown.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              'إجمالي القطع: ${comps.fold<int>(0, (sum, c) => sum + ((c['qty'] as int?) ?? 0))} قطعة',
+                              style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Colors.brown),
+                            ),
                           ),
                         ],
                       ),

@@ -54,9 +54,18 @@ class ManagementHubScreenState extends State<ManagementHubScreen>
         bottom: TabBar(
           controller: tabController,
           tabs: const [
-            Tab(icon: Icon(Icons.warehouse_rounded), text: 'مخزن المعرض'),
-            Tab(icon: Icon(Icons.weekend_rounded), text: 'الأصناف ومكوناتها'),
-            Tab(icon: Icon(Icons.people_alt_rounded), text: 'العملاء'),
+            Tab(
+              icon: Icon(Icons.warehouse_rounded),
+              child: FittedBox(fit: BoxFit.scaleDown, child: Text('مخزن المعرض', maxLines: 1)),
+            ),
+            Tab(
+              icon: Icon(Icons.weekend_rounded),
+              child: FittedBox(fit: BoxFit.scaleDown, child: Text('الأصناف ومكوناتها', maxLines: 1)),
+            ),
+            Tab(
+              icon: Icon(Icons.people_alt_rounded),
+              child: FittedBox(fit: BoxFit.scaleDown, child: Text('العملاء', maxLines: 1)),
+            ),
           ],
         ),
       ),
