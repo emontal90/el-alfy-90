@@ -45,6 +45,7 @@ if errorlevel 1 (
 echo.
 echo [3/3] Saving APK inside project folder (releases\)...
 if not exist "releases" mkdir "releases"
+if exist "releases\*.apk" del /Q "releases\*.apk" >nul 2>nul
 copy /Y "build\app\outputs\flutter-apk\app-release.apk" "releases\el-Alfy-v%APP_VER%.apk" >nul
 copy /Y "build\app\outputs\flutter-apk\app-release.apk" "releases\el-Alfy-latest.apk" >nul
 
@@ -56,5 +57,6 @@ echo   %cd%\releases\el-Alfy-v%APP_VER%.apk
 echo   %cd%\releases\el-Alfy-latest.apk
 echo ====================================================================
 echo.
-explorer "releases"
+start "" explorer "releases"
 pause
+exit /b 0

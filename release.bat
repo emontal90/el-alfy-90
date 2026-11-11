@@ -105,6 +105,7 @@ if errorlevel 1 (
 )
 
 if not exist "releases" mkdir "releases"
+if exist "releases\*.apk" del /Q "releases\*.apk" >nul 2>nul
 copy /Y "build\app\outputs\flutter-apk\app-release.apk" "releases\el-Alfy-v%NEW_VER%.apk" >nul
 copy /Y "build\app\outputs\flutter-apk\app-release.apk" "releases\el-Alfy-latest.apk" >nul
 echo Saved APK to: %cd%\releases\el-Alfy-v%NEW_VER%.apk
