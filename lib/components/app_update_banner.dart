@@ -258,3 +258,4 @@ class _AppUpdateBannerWidgetState extends State<_AppUpdateBannerWidget>
     );
   }
 }
+
