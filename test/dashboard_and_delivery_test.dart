@@ -503,5 +503,63 @@ void main() {
     expect(find.text('كنبة كبيرة'), findsOneWidget);
     expect(find.text('تسليم الطلب'), findsNothing);
   });
+
+  testWidgets('Component card for secondary category pieces renders horizontally with badge and counter', (tester) async {
+    final comp = {
+      'name': 'كنبة كبيرة',
+      'qty': 1,
+      'base_qty': 1,
+      'selected': true,
+      'is_custom': true,
+      'source_category_id': 2,
+      'source_category_name': 'كنز',
+    };
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Directionality(
+            textDirection: TextDirection.rtl,
+            child: Container(
+              margin: const EdgeInsets.symmetric(vertical: 5),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.check_box_rounded),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Wrap(
+                          children: [
+                            Text(comp['name'].toString()),
+                            Text('من طقم: ${comp['source_category_name']}'),
+                          ],
+                        ),
+                      ),
+                      const Icon(Icons.delete_outline),
+                    ],
+                  ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text('قطعة فردية تُخصم من مخزون (${comp['source_category_name']}) عند التسليم'),
+                      ),
+                      Text('${comp['qty']}'),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('كنبة كبيرة'), findsOneWidget);
+    expect(find.text('من طقم: كنز'), findsOneWidget);
+    expect(find.text('قطعة فردية تُخصم من مخزون (كنز) عند التسليم'), findsOneWidget);
+    expect(find.text('1'), findsOneWidget);
+  });
 }
 

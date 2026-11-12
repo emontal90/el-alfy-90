@@ -190,25 +190,10 @@ class _UpholstererStatementScreenState
     if (_isSharing) return;
     setState(() => _isSharing = true);
     try {
-      final delivLabel = UpholstererStatementHelper.formatSetsAndIndividual(
-        report.deliveredToUpholsterer.totalSets,
-        report.deliveredToUpholsterer.totalIndividualPieces,
-      );
-      final recLabel = UpholstererStatementHelper.formatSetsAndIndividual(
-        report.receivedFromUpholsterer.totalSets,
-        report.receivedFromUpholsterer.totalIndividualPieces,
-      );
-      final catLabel = _selectedCategory == 'all' ? 'جميع الأصناف' : _selectedCategory;
-      final caption =
-          'كشف حساب المنجد (${_periodDisplayLabel()})\n'
-          'الصنف: $catLabel\n'
-          'التسليم للمنجد: $delivLabel\n'
-          'الاستلام من المنجد: $recLabel';
-
       final errorMsg = await ShareHelper.captureAndShareToWhatsApp(
         boundaryKey: _captureKey,
         fileNamePrefix: 'upholsterer_statement',
-        captionText: caption,
+        captionText: 'كشف حساب المنجد - معرض الألفي',
       );
 
       if (mounted && errorMsg != null) {

@@ -667,19 +667,20 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
                         final int baseQty = (comp['base_qty'] as int?) ?? 1;
 
                         return Container(
-                          margin: const EdgeInsets.symmetric(vertical: 4),
+                          margin: const EdgeInsets.symmetric(vertical: 5),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                           decoration: BoxDecoration(
                             color: isFromOtherCat
-                                ? Colors.teal.shade50.withValues(alpha: 0.6)
+                                ? const Color(0xFFF0FDFA)
                                 : (isCustom
                                     ? Colors.blue.shade50.withValues(alpha: 0.6)
                                     : (isSelected
                                         ? AppTheme.royalGold.withValues(alpha: 0.12)
-                                        : Colors.transparent)),
-                            borderRadius: BorderRadius.circular(10),
+                                        : Colors.white)),
+                            borderRadius: BorderRadius.circular(12),
                             border: Border.all(
                               color: isFromOtherCat
-                                  ? Colors.teal.shade300
+                                  ? const Color(0xFF0D9488)
                                   : (isCustom
                                       ? Colors.blue.shade300
                                       : (isSelected
@@ -687,134 +688,194 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
                                           : Colors.grey.shade300)),
                               width: (isSelected || isCustom || isFromOtherCat) ? 1.5 : 1.0,
                             ),
-                          ),
-                          child: CheckboxListTile(
-                            value: isSelected,
-                            activeColor: AppTheme.primaryNavy,
-                            onChanged: (val) {
-                              setState(() {
-                                final bool check = val ?? false;
-                                comp['selected'] = check;
-                                if (check && comp['qty'] == 0) {
-                                  comp['qty'] = isCustom ? 1 : (baseQty * (_orderSetsCount > 0 ? _orderSetsCount : 1));
-                                } else if (!check) {
-                                  comp['qty'] = 0;
-                                }
-                              });
-                            },
-                            title: Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    comp['name'],
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      color: isSelected ? Colors.black87 : Colors.grey.shade700,
-                                    ),
-                                  ),
+                            boxShadow: [
+                              if (isFromOtherCat || isSelected)
+                                BoxShadow(
+                                  color: (isFromOtherCat ? const Color(0xFF0D9488) : AppTheme.royalGold)
+                                      .withValues(alpha: 0.08),
+                                  blurRadius: 4,
+                                  offset: const Offset(0, 2),
                                 ),
-                                if (isFromOtherCat)
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: Colors.teal.shade100,
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: Text(
-                                      'من طقم: ${comp['source_category_name']}',
-                                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.teal.shade900),
-                                    ),
-                                  )
-                                else if (isCustom)
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: Colors.blue.shade100,
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: const Text(
-                                      'إضافية مخصصة',
-                                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.blue),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                            subtitle: Text(
-                              isFromOtherCat
-                                  ? 'قطعة فردية تُخصم من مخزون (${comp['source_category_name']}) عند التسليم'
-                                  : (isCustom
-                                      ? 'قطعة إضافية مخصصة للطلب'
-                                      : 'النسبة لكل طقم: $baseQty قطعة'),
-                              style: const TextStyle(fontSize: 12),
-                            ),
-                            secondary: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                if (isCustom)
-                                  IconButton(
-                                    icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
-                                    tooltip: 'حذف هذه القطعة',
-                                    onPressed: () {
-                                      setState(() {
-                                        _editableComponents.removeAt(idx);
-                                      });
-                                    },
-                                  ),
-                                // زر إنقاص العدد مريح للإصبع
-                                Material(
-                                  color: Colors.red.shade50,
-                                  borderRadius: BorderRadius.circular(8),
-                                  child: InkWell(
-                                    borderRadius: BorderRadius.circular(8),
+                            ],
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              // السطر الأول: شيك بوكس + اسم القطعة بكامل العرض + شارة الطقم + زر الحذف
+                              Row(
+                                children: [
+                                  InkWell(
+                                    borderRadius: BorderRadius.circular(6),
                                     onTap: () {
                                       setState(() {
-                                        if (comp['qty'] > 0) {
-                                          comp['qty']--;
-                                          if (comp['qty'] == 0) {
-                                            comp['selected'] = false;
-                                          }
+                                        final bool check = !isSelected;
+                                        comp['selected'] = check;
+                                        if (check && comp['qty'] == 0) {
+                                          comp['qty'] = isCustom
+                                              ? 1
+                                              : (baseQty * (_orderSetsCount > 0 ? _orderSetsCount : 1));
+                                        } else if (!check) {
+                                          comp['qty'] = 0;
                                         }
                                       });
                                     },
-                                    child: const Padding(
-                                      padding: EdgeInsets.all(8.0),
-                                      child: Icon(Icons.remove, color: Colors.red, size: 20),
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(4.0),
+                                      child: Icon(
+                                        isSelected
+                                            ? Icons.check_box_rounded
+                                            : Icons.check_box_outline_blank_rounded,
+                                        color: isSelected ? AppTheme.primaryNavy : Colors.grey.shade400,
+                                        size: 24,
+                                      ),
                                     ),
                                   ),
-                                ),
-                                Container(
-                                  constraints: const BoxConstraints(minWidth: 36),
-                                  alignment: Alignment.center,
-                                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                                  child: Text(
-                                    '${comp['qty']}',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 18,
-                                      color: hasQty ? AppTheme.primaryNavy : Colors.grey,
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Wrap(
+                                      crossAxisAlignment: WrapCrossAlignment.center,
+                                      spacing: 6,
+                                      runSpacing: 4,
+                                      children: [
+                                        Text(
+                                          comp['name'],
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 15,
+                                            color: isSelected ? Colors.black87 : Colors.grey.shade700,
+                                          ),
+                                        ),
+                                        if (isFromOtherCat)
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFFCCFBF1),
+                                              borderRadius: BorderRadius.circular(8),
+                                              border: Border.all(color: const Color(0xFF5EEAD4)),
+                                            ),
+                                            child: Text(
+                                              'من طقم: ${comp['source_category_name']}',
+                                              style: const TextStyle(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.bold,
+                                                color: Color(0xFF0F766E),
+                                              ),
+                                            ),
+                                          )
+                                        else if (isCustom)
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                                            decoration: BoxDecoration(
+                                              color: Colors.blue.shade100,
+                                              borderRadius: BorderRadius.circular(8),
+                                            ),
+                                            child: const Text(
+                                              'إضافية مخصصة',
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.bold,
+                                                color: Colors.blue,
+                                              ),
+                                            ),
+                                          ),
+                                      ],
                                     ),
                                   ),
-                                ),
-                                // زر زيادة العدد مريح للإصبع
-                                Material(
-                                  color: Colors.green.shade50,
-                                  borderRadius: BorderRadius.circular(8),
-                                  child: InkWell(
-                                    borderRadius: BorderRadius.circular(8),
-                                    onTap: () {
-                                      setState(() {
-                                        comp['qty']++;
-                                        comp['selected'] = true;
-                                      });
-                                    },
-                                    child: const Padding(
-                                      padding: EdgeInsets.all(8.0),
-                                      child: Icon(Icons.add, color: Colors.green, size: 20),
+                                  if (isCustom)
+                                    IconButton(
+                                      icon: const Icon(Icons.delete_outline, color: Colors.red, size: 21),
+                                      tooltip: 'حذف هذه القطعة',
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                                      onPressed: () {
+                                        setState(() {
+                                          _editableComponents.removeAt(idx);
+                                        });
+                                      },
+                                    ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              // السطر الثاني: الوصف التوضيحي + عداد الكمية (+ / -)
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  const SizedBox(width: 36),
+                                  Expanded(
+                                    child: Text(
+                                      isFromOtherCat
+                                          ? 'قطعة فردية تُخصم من مخزون (${comp['source_category_name']}) عند التسليم'
+                                          : (isCustom
+                                              ? 'قطعة إضافية مخصصة للطلب'
+                                              : 'النسبة لكل طقم: $baseQty قطعة'),
+                                      style: TextStyle(
+                                        fontSize: 11.5,
+                                        color: isFromOtherCat ? const Color(0xFF0F766E) : Colors.grey.shade600,
+                                        fontWeight: isFromOtherCat ? FontWeight.w600 : FontWeight.normal,
+                                      ),
                                     ),
                                   ),
-                                ),
-                              ],
-                            ),
+                                  const SizedBox(width: 8),
+                                  // أزرار التحكم بالعدد
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Material(
+                                        color: Colors.red.shade50,
+                                        borderRadius: BorderRadius.circular(8),
+                                        child: InkWell(
+                                          borderRadius: BorderRadius.circular(8),
+                                          onTap: () {
+                                            setState(() {
+                                              if (comp['qty'] > 0) {
+                                                comp['qty']--;
+                                                if (comp['qty'] == 0) {
+                                                  comp['selected'] = false;
+                                                }
+                                              }
+                                            });
+                                          },
+                                          child: const Padding(
+                                            padding: EdgeInsets.all(7.0),
+                                            child: Icon(Icons.remove, color: Colors.red, size: 18),
+                                          ),
+                                        ),
+                                      ),
+                                      Container(
+                                        constraints: const BoxConstraints(minWidth: 34),
+                                        alignment: Alignment.center,
+                                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                                        child: Text(
+                                          '${comp['qty']}',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 17,
+                                            color: hasQty ? AppTheme.primaryNavy : Colors.grey,
+                                          ),
+                                        ),
+                                      ),
+                                      Material(
+                                        color: Colors.green.shade50,
+                                        borderRadius: BorderRadius.circular(8),
+                                        child: InkWell(
+                                          borderRadius: BorderRadius.circular(8),
+                                          onTap: () {
+                                            setState(() {
+                                              comp['qty']++;
+                                              comp['selected'] = true;
+                                            });
+                                          },
+                                          child: const Padding(
+                                            padding: EdgeInsets.all(7.0),
+                                            child: Icon(Icons.add, color: Colors.green, size: 18),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ],
                           ),
                         );
                       }),
@@ -839,36 +900,88 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
                     ),
                     const SizedBox(height: 12),
 
-                    // اختيار إضافة قطع فردية من طقم آخر
+                    // فاصل أنيق وبسيط قبل قسم إضافة قطع من طقم آخر
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Row(
+                        children: [
+                          Expanded(child: Divider(color: Colors.teal.shade200, thickness: 1)),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 10),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.style_outlined, size: 16, color: Colors.teal.shade700),
+                                const SizedBox(width: 5),
+                                Text(
+                                  'قطع إضافية من أطقم أخرى',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.teal.shade800,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Expanded(child: Divider(color: Colors.teal.shade200, thickness: 1)),
+                        ],
+                      ),
+                    ),
+
+                    // اختيار إضافة قطع فردية من طقم آخر بخلفية مميزة
                     Container(
                       decoration: BoxDecoration(
-                        color: _addFromOtherCategory
-                            ? Colors.teal.shade50.withValues(alpha: 0.45)
-                            : Colors.grey.shade50,
-                        borderRadius: BorderRadius.circular(12),
+                        gradient: LinearGradient(
+                          colors: _addFromOtherCategory
+                              ? [const Color(0xFFE6FFFA), const Color(0xFFCCFBF1)]
+                              : [const Color(0xFFF0FDFA), const Color(0xFFF8FAFC)],
+                          begin: Alignment.topRight,
+                          end: Alignment.bottomLeft,
+                        ),
+                        borderRadius: BorderRadius.circular(14),
                         border: Border.all(
                           color: _addFromOtherCategory
-                              ? Colors.teal.shade400
-                              : Colors.grey.shade300,
+                              ? const Color(0xFF0D9488)
+                              : const Color(0xFF99F6E4),
+                          width: 1.5,
                         ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF0D9488).withValues(alpha: _addFromOtherCategory ? 0.12 : 0.05),
+                            blurRadius: 6,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           CheckboxListTile(
                             value: _addFromOtherCategory,
-                            activeColor: AppTheme.primaryNavy,
-                            title: const Text(
-                              'إضافة قطع من طقم آخر',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 14,
-                                color: AppTheme.primaryNavy,
-                              ),
+                            activeColor: const Color(0xFF0F766E),
+                            checkColor: Colors.white,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                            title: const Row(
+                              children: [
+                                Icon(Icons.add_shopping_cart_rounded, size: 20, color: Color(0xFF0F766E)),
+                                SizedBox(width: 8),
+                                Text(
+                                  'إضافة قطع من طقم آخر',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14.5,
+                                    color: Color(0xFF0F766E),
+                                  ),
+                                ),
+                              ],
                             ),
-                            subtitle: const Text(
-                              'مثل إضافة كنبة فرداني من صنف آخر ليتم خصمها من مخزونه عند التسليم',
-                              style: TextStyle(fontSize: 11.5),
+                            subtitle: const Padding(
+                              padding: EdgeInsets.only(top: 4),
+                              child: Text(
+                                'مثل إضافة كنبة فرداني من صنف آخر ليتم خصمها من مخزونه عند التسليم',
+                                style: TextStyle(fontSize: 11.5, color: Color(0xFF115E59)),
+                              ),
                             ),
                             onChanged: (checked) {
                               setState(() {

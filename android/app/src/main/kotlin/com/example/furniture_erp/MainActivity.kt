@@ -1,6 +1,7 @@
 package com.example.furniture_erp
 
 import android.app.Activity
+import android.content.ClipData
 import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Intent
@@ -37,10 +38,12 @@ class MainActivity: FlutterFragmentActivity() {
         val allowedRoots = listOfNotNull(
             filesDir.parentFile?.canonicalPath,
             filesDir.canonicalPath,
-            cacheDir.canonicalPath
+            cacheDir.canonicalPath,
+            externalCacheDir?.canonicalPath,
+            externalCacheDir?.parentFile?.canonicalPath
         )
         return allowedRoots.any { root ->
-            canonicalPath.startsWith(root + File.separator)
+            canonicalPath.startsWith(root + File.separator) || canonicalPath == root
         }
     }
 
@@ -311,6 +314,17 @@ class MainActivity: FlutterFragmentActivity() {
                                 shareFile
                             )
 
+                            val clipData = ClipData.newUri(contentResolver, "statement_image", uri)
+                            val baseIntent = Intent(Intent.ACTION_SEND).apply {
+                                type = "image/png"
+                                putExtra(Intent.EXTRA_STREAM, uri)
+                                this.clipData = clipData
+                                if (caption.isNotBlank()) {
+                                    putExtra(Intent.EXTRA_TEXT, caption)
+                                }
+                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            }
+
                             fun isPackageInstalled(pkg: String): Boolean {
                                 return try {
                                     packageManager.getPackageInfo(pkg, 0)
@@ -325,15 +339,6 @@ class MainActivity: FlutterFragmentActivity() {
                             val hasWhatsApp = isPackageInstalled("com.whatsapp")
                             val hasWhatsAppBusiness = isPackageInstalled("com.whatsapp.w4b")
 
-                            val baseIntent = Intent(Intent.ACTION_SEND).apply {
-                                type = "image/png"
-                                putExtra(Intent.EXTRA_STREAM, uri)
-                                if (caption.isNotBlank()) {
-                                    putExtra(Intent.EXTRA_TEXT, caption)
-                                }
-                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                            }
-
                             val targetPkg = when {
                                 hasWhatsApp && !hasWhatsAppBusiness -> "com.whatsapp"
                                 hasWhatsAppBusiness && !hasWhatsApp -> "com.whatsapp.w4b"
@@ -342,6 +347,7 @@ class MainActivity: FlutterFragmentActivity() {
 
                             if (targetPkg != null) {
                                 try {
+                                    grantUriPermission(targetPkg, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
                                     val directIntent = Intent(baseIntent).setPackage(targetPkg)
                                     startActivity(directIntent)
                                     result.success(true)
@@ -351,7 +357,17 @@ class MainActivity: FlutterFragmentActivity() {
                                 }
                             }
 
-                            startActivity(Intent.createChooser(baseIntent, "مشاركة كشف الحساب على واتساب"))
+                            val resInfoList = packageManager.queryIntentActivities(baseIntent, PackageManager.MATCH_DEFAULT_ONLY)
+                            for (resolveInfo in resInfoList) {
+                                val pkg = resolveInfo.activityInfo.packageName
+                                grantUriPermission(pkg, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            }
+
+                            val chooser = Intent.createChooser(baseIntent, "مشاركة كشف الحساب كصورة").apply {
+                                this.clipData = clipData
+                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            }
+                            startActivity(chooser)
                             result.success(true)
                         } catch (e: Exception) {
                             result.error("SHARE_FAILED", e.message ?: "فشل مشاركة الصورة", null)

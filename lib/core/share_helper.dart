@@ -20,14 +20,25 @@ class ShareHelper {
       return 'مشاركة الصور غير مدعومة على نسخة المتصفح.';
     }
 
-    await WidgetsBinding.instance.endOfFrame;
+    // ضمان اكتمال إطار الرسم وتجنب استدعاء toImage أثناء إعادة البناء
+    await Future.delayed(const Duration(milliseconds: 60));
+    if (WidgetsBinding.instance.hasScheduledFrame) {
+      await WidgetsBinding.instance.endOfFrame;
+    }
 
     final RenderObject? renderObj = boundaryKey.currentContext?.findRenderObject();
     if (renderObj is! RenderRepaintBoundary) {
       return 'تعذر تجهيز صورة كشف الحساب، يرجى المحاولة مرة أخرى.';
     }
 
+    if (renderObj.debugNeedsPaint) {
+      await Future.delayed(const Duration(milliseconds: 100));
+    }
+
     final Size widgetSize = renderObj.size;
+    if (widgetSize.isEmpty || widgetSize.width <= 0 || widgetSize.height <= 0) {
+      return 'تعذر تجهيز أبعاد صورة كشف الحساب.';
+    }
     final double maxDim = widgetSize.width > widgetSize.height ? widgetSize.width : widgetSize.height;
     final double pixelRatio = maxDim > 3200
         ? 1.5
