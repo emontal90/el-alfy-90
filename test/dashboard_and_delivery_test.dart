@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:furniture_erp/components/order_card.dart';
+import 'package:furniture_erp/core/app_theme.dart';
 import 'package:furniture_erp/core/order_delivery_helper.dart';
 import 'package:furniture_erp/screens/dashboard_screen.dart';
 
@@ -322,13 +323,15 @@ void main() {
     });
   });
 
-  testWidgets('OrderCard shows mixed sets + individual label in orange badge', (tester) async {
+  testWidgets('OrderCard shows complete/excess/incomplete status labels and distinct نمطي/أوردر colors', (tester) async {
     final categoryComps = [
       {'name': 'كنبة كبيرة', 'base_qty': 1, 'qty': 2},
       {'name': 'كنبة صغيرة', 'base_qty': 1, 'qty': 2},
       {'name': 'فوتيه', 'base_qty': 2, 'qty': 4},
     ];
-    final partialWaitingOrder = {
+
+    // 1) زائد (1 طقم + 3 فردي) مع نوع نمطي (كحلي)
+    final excessWaitingOrder = {
       'id': 20,
       'customer_name': 'محمود حسن',
       'category_name': 'كنز',
@@ -342,24 +345,111 @@ void main() {
       ]),
     };
 
+    // 2) كامل (2 طقم) مع نوع أوردر (أحمر)
+    final completeOrder = {
+      'id': 21,
+      'customer_name': 'سعيد محمد',
+      'category_name': 'كنز',
+      'order_type': 'أوردر',
+      'sets_count': 2,
+      'delivery_date': '2026-11-16',
+      'selected_components_json': jsonEncode([
+        {'name': 'كنبة كبيرة', 'qty': 2, 'base_qty': 1},
+        {'name': 'كنبة صغيرة', 'qty': 2, 'base_qty': 1},
+        {'name': 'فوتيه', 'qty': 4, 'base_qty': 2},
+      ]),
+    };
+
+    // 3) ناقص (0 طقم + 3 فردي)
+    final incompleteOrder = {
+      'id': 22,
+      'customer_name': 'كريم عادل',
+      'category_name': 'كنز',
+      'order_type': 'نمطي',
+      'sets_count': 0,
+      'delivery_date': '2026-11-17',
+      'selected_components_json': jsonEncode([
+        {'name': 'كنبة كبيرة', 'qty': 1, 'base_qty': 1},
+        {'name': 'كنبة صغيرة', 'qty': 1, 'base_qty': 1},
+        {'name': 'فوتيه', 'qty': 1, 'base_qty': 2},
+      ]),
+    };
+
     await tester.pumpWidget(
       MaterialApp(
         home: Directionality(
           textDirection: TextDirection.rtl,
           child: Scaffold(
-            body: OrderCard(
-              order: partialWaitingOrder,
-              categoryComponents: categoryComps,
-              collapsible: true,
-              isExpanded: false,
+            body: ListView(
+              children: [
+                OrderCard(
+                  order: excessWaitingOrder,
+                  categoryComponents: categoryComps,
+                  collapsible: true,
+                  isExpanded: false,
+                ),
+                OrderCard(
+                  order: completeOrder,
+                  categoryComponents: categoryComps,
+                  collapsible: true,
+                  isExpanded: false,
+                ),
+                OrderCard(
+                  order: incompleteOrder,
+                  categoryComponents: categoryComps,
+                  collapsible: true,
+                  isExpanded: false,
+                ),
+              ],
             ),
           ),
         ),
       ),
     );
 
-    expect(find.text('1 طقم + 3 فردي'), findsOneWidget);
-    expect(find.text('(7 قطعة)'), findsOneWidget);
+    expect(find.text('1 طقم + 3 فردي (زائد)'), findsOneWidget);
+    expect(find.text('2 طقم (كامل)'), findsOneWidget);
+    expect(find.text('0 طقم + 3 فردي (ناقص)'), findsOneWidget);
+
+    final Container excessContainer = tester.widget(
+      find.ancestor(
+        of: find.text('1 طقم + 3 فردي (زائد)'),
+        matching: find.byType(Container),
+      ).first,
+    );
+    expect((excessContainer.decoration as BoxDecoration).color, const Color(0xFFA16207));
+
+    final Container completeContainer = tester.widget(
+      find.ancestor(
+        of: find.text('2 طقم (كامل)'),
+        matching: find.byType(Container),
+      ).first,
+    );
+    expect((completeContainer.decoration as BoxDecoration).color, const Color(0xFFEF6C00));
+
+    final Container incompleteContainer = tester.widget(
+      find.ancestor(
+        of: find.text('0 طقم + 3 فردي (ناقص)'),
+        matching: find.byType(Container),
+      ).first,
+    );
+    expect((incompleteContainer.decoration as BoxDecoration).color, const Color(0xFFA16207));
+
+    final Container customTypeContainer = tester.widget(
+      find.ancestor(
+        of: find.text('أوردر'),
+        matching: find.byType(Container),
+      ).first,
+    );
+    expect((customTypeContainer.decoration as BoxDecoration).color, Colors.red.shade700);
+
+    final Container standardTypeContainer = tester.widget(
+      find.ancestor(
+        of: find.text('نمطي'),
+        matching: find.byType(Container),
+      ).first,
+    );
+    expect((standardTypeContainer.decoration as BoxDecoration).color, AppTheme.primaryNavy);
   });
 
   testWidgets('Delivered OrderCard collapses summary and expands on tap', (tester) async {

@@ -19,6 +19,8 @@ class SecondaryCategoryStockUpdate {
   });
 }
 
+enum OrderCompletenessStatus { complete, excess, incomplete, empty }
+
 class OrderSetSummary {
   final int sets;
   final int individualPieces;
@@ -29,6 +31,13 @@ class OrderSetSummary {
     required this.individualPieces,
     required this.totalPieces,
   });
+
+  OrderCompletenessStatus get status {
+    if (sets > 0 && individualPieces == 0) return OrderCompletenessStatus.complete;
+    if (sets > 0 && individualPieces > 0) return OrderCompletenessStatus.excess;
+    if (individualPieces > 0) return OrderCompletenessStatus.incomplete;
+    return OrderCompletenessStatus.empty;
+  }
 
   String? toOrangeBadgeLabel() {
     if (sets > 0 && individualPieces > 0) {
@@ -41,6 +50,19 @@ class OrderSetSummary {
       return '$individualPieces فردي';
     }
     return null;
+  }
+
+  String? toStatusBadgeLabel() {
+    switch (status) {
+      case OrderCompletenessStatus.complete:
+        return '$sets طقم (كامل)';
+      case OrderCompletenessStatus.excess:
+        return '$sets طقم + $individualPieces فردي (زائد)';
+      case OrderCompletenessStatus.incomplete:
+        return '0 طقم + $individualPieces فردي (ناقص)';
+      case OrderCompletenessStatus.empty:
+        return null;
+    }
   }
 }
 

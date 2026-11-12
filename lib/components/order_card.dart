@@ -44,7 +44,17 @@ class OrderCard extends StatelessWidget {
       rawCategoryComps: categoryComponents ?? const [],
       fallbackSetsCount: setsCount ?? 0,
     );
-    final String? orangeBadgeText = summary.toOrangeBadgeLabel();
+    final String? statusBadgeText = summary.toStatusBadgeLabel();
+    final Color statusBadgeColor = summary.status == OrderCompletenessStatus.complete
+        ? const Color(0xFFEF6C00) // برتقالي للـ كامل
+        : const Color(0xFFA16207); // أصفر غامق للـ زائد والناقص
+
+    final String orderTypeStr = (order['order_type'] ?? '').toString().trim();
+    final bool isCustomOrderType =
+        orderTypeStr != 'نمطي' && orderTypeStr != 'نمطى' && orderTypeStr.isNotEmpty;
+    final Color orderTypeBgColor =
+        isCustomOrderType ? Colors.red.shade700 : AppTheme.primaryNavy;
+
     final int totalPieces = summary.totalPieces;
     final String deliveryDateStr = order['delivery_date']?.toString() ?? 'غير محدد';
     final bool showDetails = !collapsible || isExpanded;
@@ -104,11 +114,11 @@ class OrderCard extends StatelessWidget {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
                             decoration: BoxDecoration(
-                              color: AppTheme.primaryNavy,
+                              color: orderTypeBgColor,
                               borderRadius: BorderRadius.circular(5),
                             ),
                             child: Text(
-                              '${order['order_type']}',
+                              orderTypeStr,
                               style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 10,
@@ -116,15 +126,15 @@ class OrderCard extends StatelessWidget {
                               ),
                             ),
                           ),
-                          if (orangeBadgeText != null)
+                          if (statusBadgeText != null)
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
                               decoration: BoxDecoration(
-                                color: const Color(0xFFD97706),
+                                color: statusBadgeColor,
                                 borderRadius: BorderRadius.circular(5),
                               ),
                               child: Text(
-                                orangeBadgeText,
+                                statusBadgeText,
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontSize: 10,
@@ -243,26 +253,26 @@ class OrderCard extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                       decoration: BoxDecoration(
-                        color: AppTheme.primaryNavy,
+                        color: orderTypeBgColor,
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
-                        '${order['order_type']}',
+                        orderTypeStr,
                         style: const TextStyle(
                             color: Colors.white,
                             fontSize: 11,
                             fontWeight: FontWeight.bold),
                       ),
                     ),
-                    if (orangeBadgeText != null)
+                    if (statusBadgeText != null)
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFD97706),
+                          color: statusBadgeColor,
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
-                          orangeBadgeText,
+                          statusBadgeText,
                           style: const TextStyle(
                               color: Colors.white,
                               fontSize: 11,
