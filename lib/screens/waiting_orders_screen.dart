@@ -360,7 +360,7 @@ class _WaitingOrdersScreenState extends State<WaitingOrdersScreen> {
                           child: InkWell(
                             borderRadius: BorderRadius.circular(8),
                             onTap: () {
-                              if (comp['qty'] > 1) {
+                              if (comp['qty'] > 0) {
                                 setModalState(() => comp['qty']--);
                               }
                             },
@@ -410,6 +410,11 @@ class _WaitingOrdersScreenState extends State<WaitingOrdersScreen> {
                       AppNotification.showError(ctx, 'يرجى كتابة اسم العميل');
                       return;
                     }
+                    final totalPieces = editableComps.fold<int>(0, (sum, c) => sum + ((c['qty'] as int?) ?? 0));
+                    if (totalPieces <= 0) {
+                      AppNotification.showError(ctx, 'يرجى تحديد قطعة واحدة على الأقل في الطلب');
+                      return;
+                    }
                     final selectedCatComps = findCatComps(selectedCategoryId);
                     final updatedSummary = OrderDeliveryHelper.summarizeOrder(
                       orderComps: editableComps,
@@ -450,6 +455,53 @@ class _WaitingOrdersScreenState extends State<WaitingOrdersScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _confirmCancelOrder(Map<String, dynamic> order) async {
+    final custName = (order['customer_name'] ?? '').toString();
+    final catName = (order['category_name'] ?? '').toString();
+
+    final bool? confirm = await showDialog<bool>(
+      context: context,
+      builder: (dCtx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.cancel_outlined, color: Colors.red, size: 28),
+            SizedBox(width: 8),
+            Text('تأكيد إلغاء الطلب', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Text(
+          'هل أنت متأكد من إلغاء وحذف طلب العميل "$custName" لطقم "$catName" من قائمة الانتظار؟',
+          style: const TextStyle(fontSize: 15),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dCtx, false),
+            child: const Text('تراجع', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () => Navigator.pop(dCtx, true),
+            child: const Text('تأكيد إلغاء الطلب'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      final db = await DBHelper.instance.database;
+      await db.delete('orders', where: 'id = ?', whereArgs: [order['id']]);
+      AppEvents.instance.notifyAll();
+      if (mounted) {
+        AppNotification.showSuccess(context, 'تم إلغاء الطلب بنجاح');
+      }
+    }
   }
 
   Future<void> _confirmAndDeliverOrder(Map<String, dynamic> order) async {
@@ -1371,6 +1423,7 @@ class _WaitingOrdersScreenState extends State<WaitingOrdersScreen> {
                               }
                             });
                           },
+                          onDeletePressed: () => _confirmCancelOrder(order),
                           onEditPressed: () => _openEditOrderModal(order),
                           onDeliverPressed: () => _confirmAndDeliverOrder(order),
                         );

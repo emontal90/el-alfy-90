@@ -27,7 +27,32 @@ class _UphPieceItem {
 
   _UphPieceItem({required String name, required int qty, this.baseQty = 1})
       : nameCtrl = TextEditingController(text: name),
-        qtyCtrl = TextEditingController(text: qty > 0 ? qty.toString() : '1');
+        qtyCtrl = TextEditingController(text: qty >= 0 ? qty.toString() : '0');
+
+  void dispose() {
+    nameCtrl.dispose();
+    qtyCtrl.dispose();
+  }
+}
+
+/// عنصر يمثل قطعة قيد التعديل في نافذة تعديل دفعة المنجد
+class _EditBatchPieceItem {
+  final TextEditingController nameCtrl;
+  final TextEditingController qtyCtrl;
+  final int baseQty;
+  final int receivedQty;
+  final String sentDate;
+  final String? receivedDate;
+
+  _EditBatchPieceItem({
+    required String name,
+    required int sentQty,
+    required this.receivedQty,
+    this.baseQty = 1,
+    required this.sentDate,
+    this.receivedDate,
+  })  : nameCtrl = TextEditingController(text: name),
+        qtyCtrl = TextEditingController(text: '$sentQty');
 
   void dispose() {
     nameCtrl.dispose();
@@ -321,7 +346,7 @@ class _UpholstererScreenState extends State<UpholstererScreen> {
           );
 
           void syncSets(int n) {
-            setsToDeliver = n >= 1 ? n : 1;
+            setsToDeliver = n >= 0 ? n : 0;
             setsCtrl.text = '$setsToDeliver';
             for (final p in pieceItems) {
               p.qtyCtrl.text = '${setsToDeliver * p.baseQty}';
@@ -444,7 +469,7 @@ class _UpholstererScreenState extends State<UpholstererScreen> {
                               child: InkWell(
                                 borderRadius: BorderRadius.circular(10),
                                 onTap: () {
-                                  if (setsToDeliver > 1) {
+                                  if (setsToDeliver > 0) {
                                     setModalState(() {
                                       syncSets(setsToDeliver - 1);
                                     });
@@ -471,7 +496,7 @@ class _UpholstererScreenState extends State<UpholstererScreen> {
                                 ),
                                 onChanged: (val) {
                                   final n = int.tryParse(val.trim());
-                                  if (n != null && n >= 1) {
+                                  if (n != null && n >= 0) {
                                     setModalState(() {
                                       syncSets(n);
                                     });
@@ -572,8 +597,8 @@ class _UpholstererScreenState extends State<UpholstererScreen> {
                             child: InkWell(
                               borderRadius: BorderRadius.circular(8),
                               onTap: () {
-                                int q = int.tryParse(piece.qtyCtrl.text.trim()) ?? 1;
-                                if (q > 1) {
+                                int q = int.tryParse(piece.qtyCtrl.text.trim()) ?? 0;
+                                if (q > 0) {
                                   setModalState(() {
                                     piece.qtyCtrl.text = '${q - 1}';
                                   });
@@ -610,7 +635,7 @@ class _UpholstererScreenState extends State<UpholstererScreen> {
                             child: InkWell(
                               borderRadius: BorderRadius.circular(8),
                               onTap: () {
-                                int q = int.tryParse(piece.qtyCtrl.text.trim()) ?? 1;
+                                int q = int.tryParse(piece.qtyCtrl.text.trim()) ?? 0;
                                 setModalState(() {
                                   piece.qtyCtrl.text = '${q + 1}';
                                 });
@@ -650,21 +675,22 @@ class _UpholstererScreenState extends State<UpholstererScreen> {
                       for (final p in pieceItems) {
                         final pName = p.nameCtrl.text.trim();
                         if (pName.isNotEmpty) {
-                          final pQty = int.tryParse(p.qtyCtrl.text.trim()) ?? 1;
-                          final finalQty = pQty > 0 ? pQty : 1;
-                          totalSent += finalQty;
-                          validPieces.add({
-                            'name': pName,
-                            'base_qty': p.baseQty,
-                            'sent_qty': finalQty,
-                            'received_qty': 0,
-                            'sent_date': today,
-                            'received_date': null,
-                          });
+                          final pQty = int.tryParse(p.qtyCtrl.text.trim()) ?? 0;
+                          if (pQty > 0) {
+                            totalSent += pQty;
+                            validPieces.add({
+                              'name': pName,
+                              'base_qty': p.baseQty,
+                              'sent_qty': pQty,
+                              'received_qty': 0,
+                              'sent_date': today,
+                              'received_date': null,
+                            });
+                          }
                         }
                       }
 
-                      if (validPieces.isEmpty) {
+                      if (validPieces.isEmpty || totalSent <= 0) {
                         AppNotification.showError(ctx, 'يرجى تحديد قطعة واحدة على الأقل للطقم');
                         return;
                       }
@@ -727,6 +753,393 @@ class _UpholstererScreenState extends State<UpholstererScreen> {
                     icon: const Icon(Icons.check_circle_rounded),
                     label: const Text(
                       'تسجيل التسليم للمنجد',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // 1.5. نافذة تعديل بيانات الدفعة والأصناف لدى المنجد
+  // ---------------------------------------------------------------------------
+  void _openEditBatchModal(Map<String, dynamic> initialBatch) {
+    final Map<String, dynamic> batch = Map<String, dynamic>.from(initialBatch);
+    final int batchId = batch['id'] as int;
+    final uphNameCtrl = TextEditingController(text: (batch['upholsterer_name'] ?? '').toString());
+    int setsCount = (batch['sets_sent'] as int?) ?? 1;
+    final setsCtrl = TextEditingController(text: '$setsCount');
+
+    final rawPieces = _parseBatchPieces(batch);
+    final List<_EditBatchPieceItem> pieceItems = rawPieces.map((p) {
+      final pName = (p['name'] ?? 'قطعة').toString();
+      final int pSent = (p['sent_qty'] as int?) ?? 1;
+      final int pRec = (p['received_qty'] as int?) ?? 0;
+      final int bQty = (p['base_qty'] as int?) ?? 1;
+      final sDate = (p['sent_date'] ?? batch['sent_date'] ?? '').toString();
+      final rDate = p['received_date']?.toString();
+      return _EditBatchPieceItem(
+        name: pName,
+        sentQty: pSent,
+        receivedQty: pRec,
+        baseQty: bQty > 0 ? bQty : 1,
+        sentDate: sDate,
+        receivedDate: rDate,
+      );
+    }).toList();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) {
+          void syncEditSets(int n) {
+            setsCount = n >= 0 ? n : 0;
+            setsCtrl.text = '$setsCount';
+            if (setsCount == 0) {
+              for (final p in pieceItems) {
+                // عند النزول بعدد الأطقم إلى صفر تصبح القطع صفر ما لم تكن مستلمة بالفعل
+                p.qtyCtrl.text = '${p.receivedQty}';
+              }
+            } else {
+              for (final p in pieceItems) {
+                final target = setsCount * p.baseQty;
+                p.qtyCtrl.text = '${target >= p.receivedQty ? target : p.receivedQty}';
+              }
+            }
+          }
+
+          return Padding(
+            padding: AppTheme.modalSheetPadding(ctx),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.edit_note_rounded, color: AppTheme.primaryNavy, size: 26),
+                          const SizedBox(width: 8),
+                          Text(
+                            'تعديل الصنف: طقم (${batch['category_name']})',
+                            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: AppTheme.primaryNavy),
+                          ),
+                        ],
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () => Navigator.pop(ctx),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+
+                  // اسم المنجد
+                  TextField(
+                    controller: uphNameCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'اسم المنجد *',
+                      prefixIcon: Icon(Icons.person),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // عدد الأطقم
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primaryNavy.withValues(alpha: 0.04),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppTheme.primaryNavy.withValues(alpha: 0.15)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'تعديل عدد الأطقم:',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppTheme.primaryNavy),
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Material(
+                              color: Colors.red.shade50,
+                              borderRadius: BorderRadius.circular(10),
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(10),
+                                onTap: () {
+                                  if (setsCount > 0) {
+                                    setModalState(() {
+                                      syncEditSets(setsCount - 1);
+                                    });
+                                  }
+                                },
+                                child: const Padding(
+                                  padding: EdgeInsets.all(10.0),
+                                  child: Icon(Icons.remove, color: Colors.red, size: 26),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: TextField(
+                                controller: setsCtrl,
+                                keyboardType: TextInputType.number,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppTheme.primaryNavy),
+                                decoration: const InputDecoration(
+                                  labelText: 'عدد الأطقم',
+                                  prefixIcon: Icon(Icons.weekend_rounded),
+                                ),
+                                onChanged: (val) {
+                                  final n = int.tryParse(val.trim());
+                                  if (n != null && n >= 0) {
+                                    setModalState(() {
+                                      syncEditSets(n);
+                                    });
+                                  }
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Material(
+                              color: Colors.green.shade50,
+                              borderRadius: BorderRadius.circular(10),
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(10),
+                                onTap: () {
+                                  setModalState(() {
+                                    syncEditSets(setsCount + 1);
+                                  });
+                                },
+                                child: const Padding(
+                                  padding: EdgeInsets.all(10.0),
+                                  child: Icon(Icons.add, color: Colors.green, size: 26),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // قائمة القطع
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.shade50,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.amber.shade200),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'قطع الطقم المسلّمة للمنجد:',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppTheme.primaryNavy),
+                        ),
+                        Text(
+                          'طقم: ${batch['category_name']} ($setsCount طقم)',
+                          style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.brown, fontSize: 13),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+
+                  ...pieceItems.asMap().entries.map((entry) {
+                    final piece = entry.value;
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.grey.shade300),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.chair_rounded, color: AppTheme.primaryNavy, size: 20),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            flex: 3,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  piece.nameCtrl.text,
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                                ),
+                                if (piece.receivedQty > 0)
+                                  Text(
+                                    'مستلم منها: ${piece.receivedQty} قطعة (لا يمكن إنقاص المسلّم دونها)',
+                                    style: TextStyle(fontSize: 11, color: Colors.green.shade800, fontWeight: FontWeight.w600),
+                                  )
+                                else
+                                  Text(
+                                    'النسبة: عدد ${piece.baseQty} في الطقم الواحد',
+                                    style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                                  ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+
+                          // زر إنقاص
+                          Material(
+                            color: Colors.red.shade50,
+                            borderRadius: BorderRadius.circular(8),
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(8),
+                              onTap: () {
+                                int q = int.tryParse(piece.qtyCtrl.text.trim()) ?? 0;
+                                if (q > piece.receivedQty) {
+                                  setModalState(() {
+                                    piece.qtyCtrl.text = '${q - 1}';
+                                  });
+                                }
+                              },
+                              child: const Padding(
+                                padding: EdgeInsets.all(8.0),
+                                child: Icon(Icons.remove, color: Colors.red, size: 22),
+                              ),
+                            ),
+                          ),
+
+                          // حقل الإدخال
+                          Container(
+                            width: 50,
+                            margin: const EdgeInsets.symmetric(horizontal: 4),
+                            child: TextField(
+                              controller: piece.qtyCtrl,
+                              keyboardType: TextInputType.number,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                              decoration: InputDecoration(
+                                isDense: true,
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                              ),
+                            ),
+                          ),
+
+                          // زر زيادة
+                          Material(
+                            color: Colors.green.shade50,
+                            borderRadius: BorderRadius.circular(8),
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(8),
+                              onTap: () {
+                                int q = int.tryParse(piece.qtyCtrl.text.trim()) ?? 0;
+                                setModalState(() {
+                                  piece.qtyCtrl.text = '${q + 1}';
+                                });
+                              },
+                              child: const Padding(
+                                padding: EdgeInsets.all(8.0),
+                                child: Icon(Icons.add, color: Colors.green, size: 22),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+                  const SizedBox(height: 18),
+
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.primaryNavy,
+                      foregroundColor: AppTheme.royalGold,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    onPressed: () async {
+                      final uphName = uphNameCtrl.text.trim();
+                      if (uphName.isEmpty) {
+                        AppNotification.showError(ctx, 'يرجى إدخال اسم المنجد أولاً');
+                        return;
+                      }
+
+                      int totalSent = 0;
+                      int totalRec = 0;
+                      final updatedPieces = <Map<String, dynamic>>[];
+
+                      for (final p in pieceItems) {
+                        final pName = p.nameCtrl.text.trim().isNotEmpty ? p.nameCtrl.text.trim() : 'قطعة';
+                        final q = int.tryParse(p.qtyCtrl.text.trim()) ?? p.receivedQty;
+                        if (q < p.receivedQty) {
+                          AppNotification.showError(ctx, 'لا يمكن جعل عدد القطع المسلّمة لـ "$pName" أقل من المستلم فعلياً (${p.receivedQty})');
+                          return;
+                        }
+                        if (q > 0 || p.receivedQty > 0) {
+                          totalSent += q;
+                          totalRec += p.receivedQty;
+                          updatedPieces.add({
+                            'name': pName,
+                            'base_qty': p.baseQty,
+                            'sent_qty': q,
+                            'received_qty': p.receivedQty,
+                            'sent_date': p.sentDate,
+                            'received_date': p.receivedDate,
+                          });
+                        }
+                      }
+
+                      if (totalSent <= 0) {
+                        AppNotification.showError(ctx, 'يرجى تحديد قطعة واحدة مسلّمة على الأقل');
+                        return;
+                      }
+
+                      final db = await DBHelper.instance.database;
+                      await db.update(
+                        'upholsterer_batches',
+                        {
+                          'upholsterer_name': uphName,
+                          'piece_name': updatedPieces.isNotEmpty ? updatedPieces.first['name'] : batch['piece_name'],
+                          'total_sent': totalSent,
+                          'received_qty': totalRec,
+                          'sets_sent': setsCount,
+                          'pieces_json': jsonEncode(updatedPieces),
+                        },
+                        where: 'id = ?',
+                        whereArgs: [batchId],
+                      );
+
+                      try {
+                        await db.update(
+                          'upholsterer_transactions',
+                          {
+                            'upholsterer_name': uphName,
+                          },
+                          where: 'batch_id = ?',
+                          whereArgs: [batchId],
+                        );
+                      } catch (_) {}
+
+                      AppEvents.instance.notifyAll();
+                      if (mounted) {
+                        Navigator.pop(ctx);
+                        AppNotification.showSuccess(context, 'تم تحديث بيانات الصنف والمنجد بنجاح');
+                      }
+                    },
+                    icon: const Icon(Icons.check_circle_rounded),
+                    label: const Text(
+                      'حفظ التعديلات',
                       style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                     ),
                   ),
@@ -1809,6 +2222,14 @@ class _UpholstererScreenState extends State<UpholstererScreen> {
                                       ),
                                     ),
                                     const SizedBox(width: 6),
+                                    IconButton(
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                                      tooltip: 'تعديل الصنف / الدفعة',
+                                      icon: const Icon(Icons.edit_outlined, size: 20, color: AppTheme.primaryNavy),
+                                      onPressed: () => _openEditBatchModal(b),
+                                    ),
+                                    const SizedBox(width: 4),
                                     ElevatedButton.icon(
                                       style: ElevatedButton.styleFrom(
                                         backgroundColor: isDone ? Colors.green.shade700 : AppTheme.primaryNavy,
@@ -2163,22 +2584,32 @@ class _UpholstererScreenState extends State<UpholstererScreen> {
                                         icon: const Icon(Icons.delete_outline, color: Colors.red),
                                         onPressed: () => _confirmDeleteBatch(b),
                                       ),
-                                      ElevatedButton.icon(
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: isDone ? Colors.green.shade700 : AppTheme.primaryNavy,
-                                          foregroundColor: isDone ? Colors.white : AppTheme.royalGold,
-                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                                        ),
-                                        onPressed: () => _openReceiveModal(b),
-                                        icon: Icon(
-                                          isDone ? Icons.check : Icons.assignment_turned_in_rounded,
-                                          size: 18,
-                                        ),
-                                        label: Text(
-                                          isDone ? 'تفاصيل الاستلام' : 'استلام',
-                                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                                        ),
+                                      Row(
+                                        children: [
+                                          IconButton(
+                                            tooltip: 'تعديل الصنف / الدفعة',
+                                            icon: const Icon(Icons.edit_outlined, size: 22, color: AppTheme.primaryNavy),
+                                            onPressed: () => _openEditBatchModal(b),
+                                          ),
+                                          const SizedBox(width: 6),
+                                          ElevatedButton.icon(
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: isDone ? Colors.green.shade700 : AppTheme.primaryNavy,
+                                              foregroundColor: isDone ? Colors.white : AppTheme.royalGold,
+                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                            ),
+                                            onPressed: () => _openReceiveModal(b),
+                                            icon: Icon(
+                                              isDone ? Icons.check : Icons.assignment_turned_in_rounded,
+                                              size: 18,
+                                            ),
+                                            label: Text(
+                                              isDone ? 'تفاصيل الاستلام' : 'استلام',
+                                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ],
                                   ),

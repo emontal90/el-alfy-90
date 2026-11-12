@@ -332,13 +332,23 @@ class MainActivity: FlutterFragmentActivity() {
                             }
                             val shareDir = File(cacheDir, "shared_statements")
                             if (!shareDir.exists()) shareDir.mkdirs()
+
+                            // تنظيف الملفات المؤقتة القديمة فقط (أكثر من ساعتين) مع الحفاظ التام على الملف الحالي
+                            val now = System.currentTimeMillis()
                             shareDir.listFiles()?.forEach { old ->
-                                if (old.isFile) old.delete()
+                                if (old.isFile && old.canonicalPath != sourceFile.canonicalPath && (now - old.lastModified() > 2 * 3600 * 1000L)) {
+                                    try { old.delete() } catch (_: Exception) {}
+                                }
                             }
-                            val safeName = File(path).name.ifBlank { "statement.png" }
+                            val safeName = File(path).name.ifBlank { "statement_${now}.png" }
                             val shareFile = File(shareDir, safeName)
                             if (sourceFile.canonicalPath != shareFile.canonicalPath) {
                                 sourceFile.copyTo(shareFile, overwrite = true)
+                            }
+
+                            if (!shareFile.exists() || shareFile.length() == 0L) {
+                                result.error("INVALID_FILE", "ملف الصورة فارغ أو تعذر إنشاؤه", null)
+                                return@setMethodCallHandler
                             }
 
                             val uri = FileProvider.getUriForFile(
@@ -356,6 +366,7 @@ class MainActivity: FlutterFragmentActivity() {
                                     putExtra(Intent.EXTRA_TEXT, caption)
                                 }
                                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                             }
 
                             fun isPackageInstalled(pkg: String): Boolean {
@@ -372,6 +383,18 @@ class MainActivity: FlutterFragmentActivity() {
                             val hasWhatsApp = isPackageInstalled("com.whatsapp")
                             val hasWhatsAppBusiness = isPackageInstalled("com.whatsapp.w4b")
 
+                            // منح الصلاحية المباشرة لتطبيقات واتساب قبل الإطلاق
+                            if (hasWhatsApp) {
+                                try {
+                                    grantUriPermission("com.whatsapp", uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                } catch (_: Exception) {}
+                            }
+                            if (hasWhatsAppBusiness) {
+                                try {
+                                    grantUriPermission("com.whatsapp.w4b", uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                } catch (_: Exception) {}
+                            }
+
                             val targetPkg = when {
                                 hasWhatsApp && !hasWhatsAppBusiness -> "com.whatsapp"
                                 hasWhatsAppBusiness && !hasWhatsApp -> "com.whatsapp.w4b"
@@ -380,8 +403,11 @@ class MainActivity: FlutterFragmentActivity() {
 
                             if (targetPkg != null) {
                                 try {
-                                    grantUriPermission(targetPkg, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                    val directIntent = Intent(baseIntent).setPackage(targetPkg)
+                                    val directIntent = Intent(baseIntent).apply {
+                                        setPackage(targetPkg)
+                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    }
                                     startActivity(directIntent)
                                     result.success(true)
                                     return@setMethodCallHandler
@@ -393,12 +419,15 @@ class MainActivity: FlutterFragmentActivity() {
                             val resInfoList = packageManager.queryIntentActivities(baseIntent, PackageManager.MATCH_DEFAULT_ONLY)
                             for (resolveInfo in resInfoList) {
                                 val pkg = resolveInfo.activityInfo.packageName
-                                grantUriPermission(pkg, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                try {
+                                    grantUriPermission(pkg, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                } catch (_: Exception) {}
                             }
 
                             val chooser = Intent.createChooser(baseIntent, "مشاركة كشف الحساب كصورة").apply {
                                 this.clipData = clipData
                                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                             }
                             startActivity(chooser)
                             result.success(true)

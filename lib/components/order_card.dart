@@ -9,6 +9,7 @@ class OrderCard extends StatelessWidget {
   final List<dynamic>? categoryComponents;
   final VoidCallback? onDeliverPressed;
   final VoidCallback? onEditPressed;
+  final VoidCallback? onDeletePressed;
   final bool isDelivered;
   final bool collapsible;
   final bool isExpanded;
@@ -20,6 +21,7 @@ class OrderCard extends StatelessWidget {
     this.categoryComponents,
     this.onDeliverPressed,
     this.onEditPressed,
+    this.onDeletePressed,
     this.isDelivered = false,
     this.collapsible = false,
     this.isExpanded = true,
@@ -404,12 +406,26 @@ class OrderCard extends StatelessWidget {
               ),
             ],
 
-            // أزرار العمليات (تعديل الطلب / تسليم الطلب)
-            if (!isDelivered && (onEditPressed != null || onDeliverPressed != null)) ...[
+            // أزرار العمليات (إلغاء الطلب / تعديل الطلب / تسليم الطلب)
+            if (!isDelivered && (onDeletePressed != null || onEditPressed != null || onDeliverPressed != null)) ...[
               const SizedBox(height: 10),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
+                  if (onDeletePressed != null) ...[
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red.shade700,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      onPressed: onDeletePressed,
+                      icon: const Icon(Icons.cancel_outlined, size: 17),
+                      label: const Text('إلغاء الطلب', style: TextStyle(fontWeight: FontWeight.bold)),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
                   if (onEditPressed != null)
                     ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(

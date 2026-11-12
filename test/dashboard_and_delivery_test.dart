@@ -504,6 +504,79 @@ void main() {
     expect(find.text('تسليم الطلب'), findsNothing);
   });
 
+  testWidgets('OrderCard shows إلغاء الطلب next to تعديل الطلب and triggers callback', (tester) async {
+    bool deleteTriggered = false;
+    bool editTriggered = false;
+
+    final sampleWaitingOrder = {
+      'id': 101,
+      'customer_name': 'محمد إبراهيم',
+      'category_name': 'صالون مودرن',
+      'category_id': 1,
+      'specs': '',
+      'order_type': 'نمطي',
+      'delivery_date': '2026-11-20',
+      'status': 'waiting',
+      'sets_count': 1,
+      'selected_components_json': jsonEncode([
+        {'name': 'كنبة كبيرة', 'qty': 1, 'base_qty': 1},
+        {'name': 'فوتيه', 'qty': 2, 'base_qty': 2},
+      ]),
+    };
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Directionality(
+          textDirection: TextDirection.rtl,
+          child: Scaffold(
+            body: OrderCard(
+              order: sampleWaitingOrder,
+              isDelivered: false,
+              collapsible: false,
+              isExpanded: true,
+              onDeletePressed: () => deleteTriggered = true,
+              onEditPressed: () => editTriggered = true,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('إلغاء الطلب'), findsOneWidget);
+    expect(find.text('تعديل الطلب'), findsOneWidget);
+
+    await tester.tap(find.text('إلغاء الطلب'));
+    await tester.pump();
+    expect(deleteTriggered, isTrue);
+
+    await tester.tap(find.text('تعديل الطلب'));
+    await tester.pump();
+    expect(editTriggered, isTrue);
+  });
+
+  test('Order piece quantity can be reduced to zero and summarizes accurately', () {
+    final compsWithZero = [
+      {'name': 'كنبة كبيرة', 'qty': 0, 'base_qty': 1},
+      {'name': 'كنبة صغيرة', 'qty': 1, 'base_qty': 1},
+      {'name': 'فوتيه', 'qty': 0, 'base_qty': 2},
+    ];
+
+    final summary = OrderDeliveryHelper.summarizeOrder(
+      orderComps: compsWithZero,
+      rawCategoryComps: [
+        {'name': 'كنبة كبيرة', 'qty': 1},
+        {'name': 'كنبة صغيرة', 'qty': 1},
+        {'name': 'فوتيه', 'qty': 2},
+      ],
+      fallbackSetsCount: 1,
+    );
+
+    expect(summary.sets, 0);
+    expect(summary.individualPieces, 1);
+    expect(summary.totalPieces, 1);
+    expect(summary.status, OrderCompletenessStatus.incomplete);
+  });
+
   testWidgets('Component card for secondary category pieces renders horizontally with badge and counter', (tester) async {
     final comp = {
       'name': 'كنبة كبيرة',
