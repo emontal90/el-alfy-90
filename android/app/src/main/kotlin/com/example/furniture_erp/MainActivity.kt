@@ -2,6 +2,7 @@ package com.example.furniture_erp
 
 import android.app.Activity
 import android.content.ClipData
+import android.content.Context
 import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Intent
@@ -9,8 +10,10 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
+import android.os.PowerManager
 import android.provider.MediaStore
 import android.provider.Settings
+import android.view.WindowManager
 import androidx.core.content.FileProvider
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -32,6 +35,7 @@ class MainActivity: FlutterFragmentActivity() {
 
     private var pendingBackupResult: MethodChannel.Result? = null
     private var pendingExportSourcePath: String? = null
+    private var updateWakeLock: PowerManager.WakeLock? = null
 
     private fun isInsideAppFiles(file: File): Boolean {
         val canonicalPath = file.canonicalPath
@@ -159,6 +163,35 @@ class MainActivity: FlutterFragmentActivity() {
                         } catch (e: Exception) {
                             result.error("OPEN_FAILED", e.message ?: "Could not open browser", null)
                         }
+                    }
+                    "acquireWakeLock" -> {
+                        try {
+                            val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+                            if (updateWakeLock == null) {
+                                updateWakeLock = powerManager.newWakeLock(
+                                    PowerManager.PARTIAL_WAKE_LOCK,
+                                    "furniture_erp:update_download"
+                                ).apply {
+                                    setReferenceCounted(false)
+                                }
+                            }
+                            updateWakeLock?.acquire(20 * 60 * 1000L)
+                            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                            result.success(true)
+                        } catch (e: Exception) {
+                            result.success(false)
+                        }
+                    }
+                    "releaseWakeLock" -> {
+                        try {
+                            if (updateWakeLock?.isHeld == true) {
+                                updateWakeLock?.release()
+                            }
+                        } catch (_: Exception) {}
+                        try {
+                            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                        } catch (_: Exception) {}
+                        result.success(true)
                     }
                     else -> result.notImplemented()
                 }

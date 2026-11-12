@@ -187,6 +187,128 @@ class _GeneralSettingsTabState extends State<_GeneralSettingsTab> {
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          // إشعار بارز في حال وجود تحديث جديد متاح
+          ValueListenableBuilder<AppUpdateInfo?>(
+            valueListenable: AppUpdateService.availableUpdateNotifier,
+            builder: (context, update, _) {
+              if (update == null) return const SizedBox.shrink();
+              return Container(
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [
+                      Color(0xFF162D4A),
+                      AppTheme.primaryNavy,
+                    ],
+                    begin: Alignment.topRight,
+                    end: Alignment.bottomLeft,
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppTheme.royalGold, width: 1.5),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.15),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                ),
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: AppTheme.royalGold.withValues(alpha: 0.2),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.new_releases_rounded, color: AppTheme.royalGold, size: 24),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'تحديث جديد متوفر (${update.latestVersion})',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 15,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'إصدارك الحالي: ${AppVersion.displayVersion}',
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.7),
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE53935),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Text(
+                            'تحديث متاح',
+                            style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (update.releaseNotes.trim().isNotEmpty) ...[
+                      const SizedBox(height: 10),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          update.releaseNotes.trim(),
+                          maxLines: 4,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.9),
+                            fontSize: 12,
+                            height: 1.4,
+                          ),
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.royalGold,
+                          foregroundColor: AppTheme.primaryNavy,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          elevation: 2,
+                        ),
+                        onPressed: () => AppUpdateDialog.show(context, update),
+                        icon: const Icon(Icons.download_rounded, size: 20),
+                        label: const Text(
+                          'تحديث التطبيق الآن',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
           // قسم الأمان وحماية التطبيق بالبصمة
           Card(
             elevation: 2,
@@ -323,28 +445,50 @@ class _GeneralSettingsTabState extends State<_GeneralSettingsTab> {
                     ],
                   ),
                   const SizedBox(height: 14),
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppTheme.primaryNavy,
-                        side: BorderSide(color: AppTheme.primaryNavy.withValues(alpha: 0.35)),
-                        padding: const EdgeInsets.symmetric(vertical: 11),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      onPressed: _isCheckingUpdate ? null : _checkForUpdatesManually,
-                      icon: _isCheckingUpdate
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.system_update_rounded, size: 20),
-                      label: Text(
-                        _isCheckingUpdate ? 'جارٍ التحقق من التحديثات...' : 'التحقق من التحديثات',
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ),
+                  ValueListenableBuilder<AppUpdateInfo?>(
+                    valueListenable: AppUpdateService.availableUpdateNotifier,
+                    builder: (context, update, _) {
+                      return SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppTheme.primaryNavy,
+                            side: BorderSide(
+                              color: update != null
+                                  ? const Color(0xFFE53935)
+                                  : AppTheme.primaryNavy.withValues(alpha: 0.35),
+                              width: update != null ? 1.5 : 1.0,
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 11),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          onPressed: _isCheckingUpdate ? null : _checkForUpdatesManually,
+                          icon: _isCheckingUpdate
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : Badge(
+                                  isLabelVisible: update != null,
+                                  label: const Text('1', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                                  backgroundColor: const Color(0xFFE53935),
+                                  child: const Icon(Icons.system_update_rounded, size: 20),
+                                ),
+                          label: Text(
+                            _isCheckingUpdate
+                                ? 'جارٍ التحقق من التحديثات...'
+                                : (update != null
+                                    ? 'يتوفر تحديث جديد (${update.latestVersion})'
+                                    : 'التحقق من التحديثات'),
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: update != null ? const Color(0xFFE53935) : AppTheme.primaryNavy,
+                            ),
+                          ),
+                        ),
+                      );
+                    },
                   ),
                 ],
               ),

@@ -15,6 +15,8 @@ class AppUpdateInfo {
   final String releaseNotes;
   final int apkSize;
 
+  String get latestVersion => version;
+
   const AppUpdateInfo({
     required this.version,
     required this.tagName,
@@ -28,6 +30,10 @@ class AppUpdateInfo {
 class AppUpdateService {
   static const MethodChannel _channel =
       MethodChannel('com.example.furniture_erp/app_updater');
+
+  /// يخزن معلومات التحديث المتاح لحظياً لتحديث الواجهات وشارة الترس (Badge 1)
+  static final ValueNotifier<AppUpdateInfo?> availableUpdateNotifier =
+      ValueNotifier<AppUpdateInfo?>(null);
 
   static const String _latestReleaseApi =
       'https://api.github.com/repos/emontal90/el-alfy-90/releases/latest';
@@ -99,6 +105,7 @@ class AppUpdateService {
       final tagName = (decoded['tag_name'] ?? '').toString().trim();
       final remoteVersion = tagName.replaceFirst(RegExp(r'^[vV]'), '');
       if (remoteVersion.isEmpty || !isVersionNewer(remoteVersion, AppVersion.version)) {
+        availableUpdateNotifier.value = null;
         return null;
       }
 
@@ -142,7 +149,7 @@ class AppUpdateService {
         throw Exception('تم نشر إصدار جديد ($tagName) لكن ملف التثبيت APK غير مرفق بعد.');
       }
 
-      return AppUpdateInfo(
+      final info = AppUpdateInfo(
         version: remoteVersion,
         tagName: tagName,
         downloadUrl: downloadUrl,
@@ -150,6 +157,8 @@ class AppUpdateService {
         releaseNotes: (decoded['body'] ?? '').toString().trim(),
         apkSize: apkSize,
       );
+      availableUpdateNotifier.value = info;
+      return info;
     } catch (e) {
       if (silent) return null;
       rethrow;

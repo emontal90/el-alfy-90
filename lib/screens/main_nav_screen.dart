@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:local_auth/local_auth.dart';
-import '../components/app_update_dialog.dart';
+import '../components/app_update_banner.dart';
 import '../core/app_events.dart';
 import '../core/app_notification.dart';
 import '../core/app_settings_service.dart';
@@ -19,7 +19,7 @@ class MainNavigationScreen extends StatefulWidget {
   State<MainNavigationScreen> createState() => _MainNavigationScreenState();
 }
 
-class _MainNavigationScreenState extends State<MainNavigationScreen> {
+class _MainNavigationScreenState extends State<MainNavigationScreen> with WidgetsBindingObserver {
   int _currentIndex = 0;
   final GlobalKey<ManagementHubScreenState> _managementHubKey = GlobalKey<ManagementHubScreenState>();
 
@@ -28,6 +28,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _screens = [
       DashboardScreen(onNavigateTab: _handleNavigate),
       const WaitingOrdersScreen(),
@@ -36,6 +37,19 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       ManagementHubScreen(key: _managementHubKey, initialTabIndex: 0),
     ];
     WidgetsBinding.instance.addPostFrameCallback((_) => _runStartupPrompts());
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _checkForAppUpdatesSilently();
+    }
   }
 
   Future<void> _runStartupPrompts() async {
@@ -47,7 +61,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   Future<void> _checkForAppUpdatesSilently() async {
     final update = await AppUpdateService.checkForUpdate(silent: true);
     if (update != null && mounted) {
-      await AppUpdateDialog.show(context, update);
+      AppUpdateBanner.show(context, update);
     }
   }
 

@@ -6,6 +6,7 @@ import '../components/app_logo.dart';
 import '../components/stat_card.dart';
 import '../core/app_events.dart';
 import '../core/app_theme.dart';
+import '../core/app_update_service.dart';
 import '../core/app_version.dart';
 import '../core/db_helper.dart';
 import 'settings_hub_screen.dart';
@@ -198,13 +199,31 @@ class _DashboardScreenState extends State<DashboardScreen> {
           logoSize: 36,
         ),
         actions: [
-          IconButton(
-            tooltip: 'الإعدادات',
-            icon: const Icon(Icons.settings_rounded, color: AppTheme.primaryNavy, size: 26),
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const SettingsHubScreen()),
-            ).then((_) => _loadStats()),
+          ValueListenableBuilder<AppUpdateInfo?>(
+            valueListenable: AppUpdateService.availableUpdateNotifier,
+            builder: (context, update, child) {
+              return IconButton(
+                tooltip: update != null ? 'تحديث جديد متاح (إصدار ${update.latestVersion})' : 'الإعدادات',
+                icon: Badge(
+                  isLabelVisible: update != null,
+                  label: const Text(
+                    '1',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  backgroundColor: const Color(0xFFE53935),
+                  alignment: AlignmentDirectional.topEnd,
+                  child: const Icon(Icons.settings_rounded, color: AppTheme.primaryNavy, size: 26),
+                ),
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const SettingsHubScreen()),
+                ).then((_) => _loadStats()),
+              );
+            },
           ),
           const SizedBox(width: 4),
         ],
