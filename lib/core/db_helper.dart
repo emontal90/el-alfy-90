@@ -81,6 +81,23 @@ class DBHelper {
           )
         ''');
       } catch (_) {}
+      try {
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS upholsterer_transactions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            batch_id INTEGER,
+            upholsterer_name TEXT NOT NULL,
+            category_id INTEGER NOT NULL,
+            category_name TEXT NOT NULL,
+            action_type TEXT NOT NULL,
+            sets_count INTEGER NOT NULL DEFAULT 0,
+            pieces_json TEXT NOT NULL,
+            total_pieces INTEGER NOT NULL DEFAULT 0,
+            action_date TEXT NOT NULL,
+            created_at TEXT NOT NULL
+          )
+        ''');
+      } catch (_) {}
 
       try {
         // تسوية وتصفير قطع أي صنف رصيد أطقمه صفر
@@ -206,6 +223,22 @@ class DBHelper {
       CREATE TABLE IF NOT EXISTS app_settings (
         key TEXT PRIMARY KEY,
         value TEXT NOT NULL
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS upholsterer_transactions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        batch_id INTEGER,
+        upholsterer_name TEXT NOT NULL,
+        category_id INTEGER NOT NULL,
+        category_name TEXT NOT NULL,
+        action_type TEXT NOT NULL,
+        sets_count INTEGER NOT NULL DEFAULT 0,
+        pieces_json TEXT NOT NULL,
+        total_pieces INTEGER NOT NULL DEFAULT 0,
+        action_date TEXT NOT NULL,
+        created_at TEXT NOT NULL
       )
     ''');
   }

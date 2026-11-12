@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart' as intl;
+import 'package:sqflite/sqflite.dart';
 import '../components/app_logo.dart';
 import '../components/refreshable_empty_view.dart';
 import '../core/app_events.dart';
@@ -9,6 +10,8 @@ import '../core/app_notification.dart';
 import '../core/app_theme.dart';
 import '../core/db_helper.dart';
 import '../core/stock_movement_helper.dart';
+import '../core/upholsterer_statement_helper.dart';
+import 'upholsterer_statement_screen.dart';
 
 class UpholstererScreen extends StatefulWidget {
   const UpholstererScreen({super.key});
@@ -167,11 +170,84 @@ class _UpholstererScreenState extends State<UpholstererScreen> {
     if (confirm == true) {
       final db = await DBHelper.instance.database;
       await db.delete('upholsterer_batches', where: 'id = ?', whereArgs: [batch['id']]);
+      try {
+        await db.delete('upholsterer_transactions', where: 'batch_id = ?', whereArgs: [batch['id']]);
+      } catch (_) {}
       AppEvents.instance.notifyAll();
       if (mounted) {
         AppNotification.showError(context, 'تم حذف الدفعة بنجاح');
       }
     }
+  }
+
+  /// فتح شاشة كشف حساب المنجد (التسليم والاستلام مع الفلتر والمشاركة كصورة)
+  void _openAccountStatement() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => UpholstererStatementScreen(
+          initialCategoryFilter: _selectedCategoryFilter,
+        ),
+      ),
+    );
+  }
+
+  /// توثيق أي استلام تاريخي سابق للدفعة قبل تحديثها لأول مرة حتى لا يضيع تاريخ الاستلام القديم
+  Future<void> _ensureHistoricalReceiveTrackedIfNeeded(
+    Database db,
+    Map<String, dynamic> originalBatch,
+  ) async {
+    final batchId = originalBatch['id'];
+    if (batchId == null) return;
+    final int recQty = (originalBatch['received_qty'] as int?) ?? 0;
+    if (recQty <= 0) return;
+
+    try {
+      final existing = await db.query(
+        'upholsterer_transactions',
+        columns: ['id'],
+        where: 'batch_id = ? AND action_type = ?',
+        whereArgs: [batchId, 'receive'],
+        limit: 1,
+      );
+      if (existing.isNotEmpty) return;
+
+      final oldPieces = _parseBatchPieces(originalBatch);
+      final Map<String, List<Map<String, dynamic>>> groupedByDate = {};
+      for (final p in oldPieces) {
+        final int pRec = (p['received_qty'] as int?) ?? 0;
+        if (pRec <= 0) continue;
+        final String dStr = (p['received_date'] ?? originalBatch['received_date'] ?? originalBatch['sent_date'] ?? '').toString().trim();
+        final parsed = UpholstererStatementHelper.parseDateOnly(dStr);
+        final key = parsed != null ? UpholstererStatementHelper.formatIsoDate(parsed) : dStr;
+        groupedByDate.putIfAbsent(key, () => []).add({
+          'name': (p['name'] ?? '').toString().trim(),
+          'qty': pRec,
+          'base_qty': (p['base_qty'] as int?) ?? 1,
+        });
+      }
+
+      for (final entry in groupedByDate.entries) {
+        int sumPieces = 0;
+        for (final item in entry.value) {
+          sumPieces += (item['qty'] as int?) ?? 0;
+        }
+        if (sumPieces <= 0) continue;
+        await db.insert('upholsterer_transactions', {
+          'batch_id': batchId,
+          'upholsterer_name': (originalBatch['upholsterer_name'] ?? '').toString(),
+          'category_id': originalBatch['category_id'],
+          'category_name': originalBatch['category_name'],
+          'action_type': 'receive',
+          'sets_count': 0,
+          'pieces_json': jsonEncode(entry.value),
+          'total_pieces': sumPieces,
+          'action_date': entry.key,
+          'created_at': entry.key,
+        });
+      }
+    } catch (_) {}
   }
 
   // ---------------------------------------------------------------------------
@@ -594,7 +670,7 @@ class _UpholstererScreenState extends State<UpholstererScreen> {
                       }
 
                       final db = await DBHelper.instance.database;
-                      await db.insert('upholsterer_batches', {
+                      final int batchId = await db.insert('upholsterer_batches', {
                         'upholsterer_name': uphName,
                         'category_id': selectedCat['id'],
                         'category_name': selectedCat['name'],
@@ -607,6 +683,28 @@ class _UpholstererScreenState extends State<UpholstererScreen> {
                         'sets_received': 0,
                         'pieces_json': jsonEncode(validPieces),
                       });
+
+                      try {
+                        final txPieces = validPieces
+                            .map((p) => {
+                                  'name': p['name'],
+                                  'qty': p['sent_qty'],
+                                  'base_qty': p['base_qty'],
+                                })
+                            .toList();
+                        await db.insert('upholsterer_transactions', {
+                          'batch_id': batchId,
+                          'upholsterer_name': uphName,
+                          'category_id': selectedCat['id'],
+                          'category_name': selectedCat['name'],
+                          'action_type': 'send',
+                          'sets_count': setsToDeliver,
+                          'pieces_json': jsonEncode(txPieces),
+                          'total_pieces': totalSent,
+                          'action_date': UpholstererStatementHelper.formatIsoDate(DateTime.now()),
+                          'created_at': StockMovementHelper.formatDateTime12(DateTime.now()),
+                        });
+                      } catch (_) {}
 
                       await StockMovementHelper.logMovement(
                         categoryId: selectedCat['id'],
@@ -1030,6 +1128,15 @@ class _UpholstererScreenState extends State<UpholstererScreen> {
     }
 
     final db = await DBHelper.instance.database;
+    final originalBatchSnapshot = Map<String, dynamic>.from(batch);
+    // حفظ أي استلام قديم قبل تحديث التواريخ على قطع الدفعة
+    final oldPieceSnapshots = await db.query('upholsterer_batches', where: 'id = ?', whereArgs: [batch['id']]);
+    if (oldPieceSnapshots.isNotEmpty) {
+      await _ensureHistoricalReceiveTrackedIfNeeded(db, oldPieceSnapshots.first);
+    } else {
+      await _ensureHistoricalReceiveTrackedIfNeeded(db, originalBatchSnapshot);
+    }
+
     await db.update(
       'upholsterer_batches',
       {
@@ -1041,6 +1148,34 @@ class _UpholstererScreenState extends State<UpholstererScreen> {
       where: 'id = ?',
       whereArgs: [batch['id']],
     );
+
+    try {
+      int totalTxPieces = 0;
+      final txPieces = <Map<String, dynamic>>[];
+      for (final p in pieces) {
+        final baseQty = (p['base_qty'] as int?) ?? 1;
+        final safeBase = baseQty > 0 ? baseQty : 1;
+        final addQty = setsCount * safeBase;
+        totalTxPieces += addQty;
+        txPieces.add({
+          'name': (p['name'] ?? '').toString().trim(),
+          'qty': addQty,
+          'base_qty': safeBase,
+        });
+      }
+      await db.insert('upholsterer_transactions', {
+        'batch_id': batch['id'],
+        'upholsterer_name': (batch['upholsterer_name'] ?? '').toString(),
+        'category_id': batch['category_id'],
+        'category_name': batch['category_name'],
+        'action_type': 'receive',
+        'sets_count': setsCount,
+        'pieces_json': jsonEncode(txPieces),
+        'total_pieces': totalTxPieces,
+        'action_date': UpholstererStatementHelper.formatIsoDate(DateTime.now()),
+        'created_at': StockMovementHelper.formatDateTime12(DateTime.now()),
+      });
+    } catch (_) {}
 
     // إضافة الأطقم وقطعها إلى جدول categories
     final catRows = await db.query('categories', where: 'id = ?', whereArgs: [batch['category_id']]);
@@ -1214,6 +1349,11 @@ class _UpholstererScreenState extends State<UpholstererScreen> {
     }
 
     final db = await DBHelper.instance.database;
+    final oldRows = await db.query('upholsterer_batches', where: 'id = ?', whereArgs: [batch['id']]);
+    if (oldRows.isNotEmpty) {
+      await _ensureHistoricalReceiveTrackedIfNeeded(db, oldRows.first);
+    }
+
     await db.update(
       'upholsterer_batches',
       {
@@ -1225,6 +1365,28 @@ class _UpholstererScreenState extends State<UpholstererScreen> {
       where: 'id = ?',
       whereArgs: [batch['id']],
     );
+
+    try {
+      final int pieceBase = (p['base_qty'] as int?) ?? 1;
+      await db.insert('upholsterer_transactions', {
+        'batch_id': batch['id'],
+        'upholsterer_name': (batch['upholsterer_name'] ?? '').toString(),
+        'category_id': batch['category_id'],
+        'category_name': batch['category_name'],
+        'action_type': 'receive',
+        'sets_count': newlyCompletedSets,
+        'pieces_json': jsonEncode([
+          {
+            'name': pName.trim(),
+            'qty': qtyToReceive,
+            'base_qty': pieceBase > 0 ? pieceBase : 1,
+          }
+        ]),
+        'total_pieces': qtyToReceive,
+        'action_date': UpholstererStatementHelper.formatIsoDate(DateTime.now()),
+        'created_at': StockMovementHelper.formatDateTime12(DateTime.now()),
+      });
+    } catch (_) {}
 
     // إضافة رصيد هذه القطعة المستلمة فوراً إلى رصيد القطعة بجدول المخزن
     final catRows = await db.query('categories', where: 'id = ?', whereArgs: [batch['category_id']]);
@@ -1347,6 +1509,30 @@ class _UpholstererScreenState extends State<UpholstererScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const AppBarTitleWithLogo(title: 'الأصناف لدى المنجد'),
+        actions: [
+          Padding(
+            padding: const EdgeInsetsDirectional.only(end: 10),
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primaryNavy,
+                foregroundColor: AppTheme.royalGold,
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                elevation: 1,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              onPressed: _openAccountStatement,
+              icon: const Icon(Icons.receipt_long_rounded, size: 17),
+              label: const Text(
+                'كشف حساب',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+              ),
+            ),
+          ),
+        ],
       ),
       body: Column(
         children: [

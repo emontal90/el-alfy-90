@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
@@ -21,6 +22,7 @@ class MainActivity: FlutterFragmentActivity() {
     companion object {
         private const val UPDATER_CHANNEL = "com.example.furniture_erp/app_updater"
         private const val BACKUP_CHANNEL = "com.example.furniture_erp/backup_transfer"
+        private const val SHARE_CHANNEL = "com.example.furniture_erp/share"
         private const val ALLOWED_RELEASE_URL_PREFIX = "https://github.com/emontal90/el-alfy-90/releases"
         private const val PICK_BACKUP_REQUEST_CODE = 4091
         private const val CREATE_BACKUP_DOC_REQUEST_CODE = 4092
@@ -271,6 +273,89 @@ class MainActivity: FlutterFragmentActivity() {
                             type = "*/*"
                         }
                         startActivityForResult(intent, PICK_BACKUP_REQUEST_CODE)
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, SHARE_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "shareImageToWhatsApp" -> {
+                        val path = call.argument<String>("path")
+                        val caption = call.argument<String>("text") ?: ""
+                        if (path.isNullOrBlank()) {
+                            result.error("INVALID_ARGS", "Missing image path", null)
+                            return@setMethodCallHandler
+                        }
+                        try {
+                            val sourceFile = File(path)
+                            if (!isInsideAppFiles(sourceFile) || !sourceFile.exists() || !sourceFile.isFile) {
+                                result.error("INVALID_FILE", "ملف الصورة غير موجود", null)
+                                return@setMethodCallHandler
+                            }
+                            val shareDir = File(cacheDir, "shared_statements")
+                            if (!shareDir.exists()) shareDir.mkdirs()
+                            shareDir.listFiles()?.forEach { old ->
+                                if (old.isFile) old.delete()
+                            }
+                            val safeName = File(path).name.ifBlank { "statement.png" }
+                            val shareFile = File(shareDir, safeName)
+                            if (sourceFile.canonicalPath != shareFile.canonicalPath) {
+                                sourceFile.copyTo(shareFile, overwrite = true)
+                            }
+
+                            val uri = FileProvider.getUriForFile(
+                                this,
+                                "$packageName.fileprovider",
+                                shareFile
+                            )
+
+                            fun isPackageInstalled(pkg: String): Boolean {
+                                return try {
+                                    packageManager.getPackageInfo(pkg, 0)
+                                    true
+                                } catch (_: PackageManager.NameNotFoundException) {
+                                    false
+                                } catch (_: Exception) {
+                                    false
+                                }
+                            }
+
+                            val hasWhatsApp = isPackageInstalled("com.whatsapp")
+                            val hasWhatsAppBusiness = isPackageInstalled("com.whatsapp.w4b")
+
+                            val baseIntent = Intent(Intent.ACTION_SEND).apply {
+                                type = "image/png"
+                                putExtra(Intent.EXTRA_STREAM, uri)
+                                if (caption.isNotBlank()) {
+                                    putExtra(Intent.EXTRA_TEXT, caption)
+                                }
+                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            }
+
+                            val targetPkg = when {
+                                hasWhatsApp && !hasWhatsAppBusiness -> "com.whatsapp"
+                                hasWhatsAppBusiness && !hasWhatsApp -> "com.whatsapp.w4b"
+                                else -> null
+                            }
+
+                            if (targetPkg != null) {
+                                try {
+                                    val directIntent = Intent(baseIntent).setPackage(targetPkg)
+                                    startActivity(directIntent)
+                                    result.success(true)
+                                    return@setMethodCallHandler
+                                } catch (_: Exception) {
+                                    // إذا تعذر الفتح المباشر يتم فتح نافذة الاختيار العامة
+                                }
+                            }
+
+                            startActivity(Intent.createChooser(baseIntent, "مشاركة كشف الحساب على واتساب"))
+                            result.success(true)
+                        } catch (e: Exception) {
+                            result.error("SHARE_FAILED", e.message ?: "فشل مشاركة الصورة", null)
+                        }
                     }
                     else -> result.notImplemented()
                 }

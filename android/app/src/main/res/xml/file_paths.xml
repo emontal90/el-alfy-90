@@ -3,5 +3,6 @@
     <cache-path name="apk_updates" path="updates/" />
     <external-cache-path name="ext_apk_updates" path="updates/" />
     <cache-path name="shared_backups" path="shared_backups/" />
+    <cache-path name="shared_statements" path="shared_statements/" />
 </paths>
 
