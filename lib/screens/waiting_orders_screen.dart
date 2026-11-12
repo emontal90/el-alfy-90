@@ -87,7 +87,11 @@ class _WaitingOrdersScreenState extends State<WaitingOrdersScreen> {
   }
 
   // نافذة تعديل بيانات ومكونات الطلب
-  void _openEditOrderModal(Map<String, dynamic> order) {
+  Future<void> _openEditOrderModal(Map<String, dynamic> order) async {
+    final db = await DBHelper.instance.database;
+    final categories = await db.query('categories', orderBy: 'id DESC');
+    if (!mounted) return;
+
     final custNameCtrl = TextEditingController(text: order['customer_name']);
     final specsCtrl = TextEditingController(text: order['specs'] ?? '');
     String selectedOrderType = (order['order_type'] == 'أوردر' || order['order_type'] == 'اوردر')
@@ -96,19 +100,36 @@ class _WaitingOrdersScreenState extends State<WaitingOrdersScreen> {
     DateTime deliveryDate =
         DateTime.tryParse(order['delivery_date'] ?? '') ?? DateTime.now();
 
+    int selectedCategoryId = (order['category_id'] as int?) ?? 0;
+    String selectedCategoryName = (order['category_name'] ?? '').toString();
+    final int initialOrderSets = (order['sets_count'] as int?) ?? 1;
+
+    List<dynamic> findCatComps(int catId) {
+      for (final cat in categories) {
+        if (cat['id'] == catId) {
+          try {
+            final decoded = jsonDecode((cat['components_json'] ?? '[]').toString());
+            if (decoded is List) return decoded;
+          } catch (_) {}
+        }
+      }
+      return const [];
+    }
+
     List comps = [];
     try {
-      comps = jsonDecode(order['selected_components_json']);
+      comps = jsonDecode((order['selected_components_json'] ?? '[]').toString());
     } catch (_) {}
 
-    final List<Map<String, dynamic>> editableComps = comps.map((c) {
-      final int q =
-          (c['qty'] is int) ? c['qty'] : int.tryParse(c['qty'].toString()) ?? 1;
-      return {
-        'name': c['name'].toString(),
-        'qty': q,
-      };
-    }).toList();
+    final initialCatComps = findCatComps(selectedCategoryId);
+    List<Map<String, dynamic>> editableComps = OrderDeliveryHelper.extractOrderPieces(
+      comps,
+      initialCatComps,
+      setsCount: initialOrderSets,
+    );
+
+    final bool existingCatPresent =
+        categories.any((c) => c['id'] == selectedCategoryId);
 
     showModalBottomSheet(
       context: context,
@@ -130,7 +151,7 @@ class _WaitingOrdersScreenState extends State<WaitingOrdersScreen> {
                   children: [
                     Expanded(
                       child: Text(
-                        'تعديل الطلب: طقم (${order['category_name']})',
+                        'تعديل الطلب: طقم ($selectedCategoryName)',
                         style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
@@ -150,6 +171,51 @@ class _WaitingOrdersScreenState extends State<WaitingOrdersScreen> {
                       prefixIcon: Icon(Icons.person)),
                 ),
                 const SizedBox(height: 12),
+                if (categories.isNotEmpty) ...[
+                  DropdownButtonFormField<int>(
+                    initialValue: existingCatPresent
+                        ? selectedCategoryId
+                        : (selectedCategoryId > 0 ? selectedCategoryId : null),
+                    decoration: const InputDecoration(
+                      labelText: 'الصنف / الموديل *',
+                      prefixIcon: Icon(Icons.weekend_rounded),
+                    ),
+                    isExpanded: true,
+                    items: [
+                      if (!existingCatPresent && selectedCategoryId > 0)
+                        DropdownMenuItem<int>(
+                          value: selectedCategoryId,
+                          child: Text('$selectedCategoryName (محذوف من الأصناف)'),
+                        ),
+                      ...categories.map((cat) {
+                        return DropdownMenuItem<int>(
+                          value: cat['id'] as int,
+                          child: Text((cat['name'] ?? '').toString()),
+                        );
+                      }),
+                    ],
+                    onChanged: (newCatId) {
+                      if (newCatId == null || newCatId == selectedCategoryId) return;
+                      final matched = categories.cast<Map<String, dynamic>?>().firstWhere(
+                            (c) => c?['id'] == newCatId,
+                            orElse: () => null,
+                          );
+                      if (matched == null) return;
+                      final newCatComps = findCatComps(newCatId);
+                      final int targetSets = initialOrderSets > 0 ? initialOrderSets : 1;
+                      setModalState(() {
+                        selectedCategoryId = newCatId;
+                        selectedCategoryName = (matched['name'] ?? '').toString();
+                        editableComps = OrderDeliveryHelper.extractOrderPieces(
+                          const [],
+                          newCatComps,
+                          setsCount: targetSets,
+                        );
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 ListTile(
                   tileColor: Colors.white,
                   shape: RoundedRectangleBorder(
@@ -344,23 +410,31 @@ class _WaitingOrdersScreenState extends State<WaitingOrdersScreen> {
                       AppNotification.showError(ctx, 'يرجى كتابة اسم العميل');
                       return;
                     }
-                    final db = await DBHelper.instance.database;
+                    final selectedCatComps = findCatComps(selectedCategoryId);
+                    final updatedSummary = OrderDeliveryHelper.summarizeOrder(
+                      orderComps: editableComps,
+                      rawCategoryComps: selectedCatComps,
+                      fallbackSetsCount: initialOrderSets,
+                    );
                     await db.update(
                         'orders',
                         {
                           'customer_name': custNameCtrl.text.trim(),
+                          'category_id': selectedCategoryId,
+                          'category_name': selectedCategoryName,
                           'specs': specsCtrl.text.trim(),
                           'order_type': selectedOrderType,
                           'delivery_date': intl.DateFormat('yyyy-MM-dd')
                               .format(deliveryDate),
                           'selected_components_json': jsonEncode(editableComps),
+                          'sets_count': updatedSummary.sets,
                         },
                         where: 'id = ?',
                         whereArgs: [order['id']]);
 
                     AppEvents.instance.notifyAll();
+                    if (ctx.mounted) Navigator.pop(ctx);
                     if (mounted) {
-                      Navigator.pop(ctx);
                       AppNotification.showSuccess(
                           context, 'تم تحديث بيانات الطلب بنجاح');
                     }

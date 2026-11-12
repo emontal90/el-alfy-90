@@ -29,6 +29,7 @@ class _MenuPieceItem {
 
 class _CategoriesTabState extends State<CategoriesTab> {
   List<Map<String, dynamic>> _categories = [];
+  final Set<int> _expandedCategoryIds = {};
 
   @override
   void initState() {
@@ -780,26 +781,52 @@ class _CategoriesTabState extends State<CategoriesTab> {
                   comps = jsonDecode(cat['components_json']);
                 } catch (_) {}
 
+                final int catId = (cat['id'] as int?) ?? i;
+                final bool isExpanded = _expandedCategoryIds.contains(catId);
+                final String summaryText = comps.isEmpty
+                    ? 'لا توجد قطع مسجلة لهذا الطقم'
+                    : comps.map((c) {
+                        final pName = (c['name'] ?? '').toString();
+                        final int bQ = (c['base_qty'] is int)
+                            ? c['base_qty'] as int
+                            : ((c['qty'] is int) ? c['qty'] as int : (int.tryParse(c['qty']?.toString() ?? '1') ?? 1));
+                        return '$bQ $pName';
+                      }).join(' • ');
+
                 return Card(
-                  margin: const EdgeInsets.symmetric(vertical: 6),
-                  elevation: 2,
+                  margin: const EdgeInsets.symmetric(vertical: 5),
+                  elevation: isExpanded ? 3 : 1.5,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14),
-                    side: BorderSide(color: AppTheme.royalGold.withValues(alpha: 0.3)),
+                    side: BorderSide(
+                      color: isExpanded
+                          ? AppTheme.royalGold
+                          : AppTheme.royalGold.withValues(alpha: 0.35),
+                      width: isExpanded ? 1.5 : 1.1,
+                    ),
                   ),
+                  clipBehavior: Clip.antiAlias,
                   child: InkWell(
                     borderRadius: BorderRadius.circular(14),
-                    onTap: () => _openEditDialog(cat),
+                    onTap: () {
+                      setState(() {
+                        if (isExpanded) {
+                          _expandedCategoryIds.remove(catId);
+                        } else {
+                          _expandedCategoryIds.add(catId);
+                        }
+                      });
+                    },
                     child: Padding(
-                      padding: const EdgeInsets.all(14.0),
+                      padding: EdgeInsets.symmetric(horizontal: 12.0, vertical: isExpanded ? 12.0 : 10.0),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // رأس الكارت: اسم الطقم + أزرار التعديل والحذف
+                          // ملخص مضغوط قبل التوسيع: اسم الصنف + ملخص مكوناته وأعدادها + الرصيد + سهم التوسيع
                           Row(
                             children: [
                               Container(
-                                padding: const EdgeInsets.all(8),
+                                padding: const EdgeInsets.all(7),
                                 decoration: BoxDecoration(
                                   color: AppTheme.primaryNavy.withValues(alpha: 0.08),
                                   borderRadius: BorderRadius.circular(10),
@@ -807,7 +834,7 @@ class _CategoriesTabState extends State<CategoriesTab> {
                                 child: const Icon(
                                   Icons.weekend_rounded,
                                   color: AppTheme.primaryNavy,
-                                  size: 24,
+                                  size: 21,
                                 ),
                               ),
                               const SizedBox(width: 10),
@@ -815,101 +842,137 @@ class _CategoriesTabState extends State<CategoriesTab> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(
-                                      cat['name'],
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 17,
-                                        color: AppTheme.primaryNavy,
-                                      ),
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            cat['name'],
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 15.5,
+                                              color: AppTheme.primaryNavy,
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: Colors.amber.shade50,
+                                            borderRadius: BorderRadius.circular(6),
+                                            border: Border.all(color: Colors.amber.shade300),
+                                          ),
+                                          child: Text(
+                                            'المخزن: ${cat['stock_qty']} طقم',
+                                            style: TextStyle(
+                                              fontSize: 10.5,
+                                              color: Colors.amber.shade900,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                    const SizedBox(height: 2),
-                                    const Text(
-                                      'المكونات والأعداد التأسيسية للطقم الواحد',
-                                      style: TextStyle(fontSize: 11, color: Colors.black54),
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      'المكونات (${comps.length}): $summaryText',
+                                      maxLines: isExpanded ? 4 : 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: 11.5,
+                                        color: Colors.grey.shade800,
+                                        fontWeight: FontWeight.w500,
+                                      ),
                                     ),
                                   ],
                                 ),
                               ),
-                              IconButton(
-                                icon: const Icon(Icons.edit_outlined, color: AppTheme.primaryNavy, size: 22),
-                                tooltip: 'تعديل الصنف ومكوناته',
-                                onPressed: () => _openEditDialog(cat),
-                              ),
-                              IconButton(
-                                icon: Icon(Icons.delete_outline, color: Colors.red.shade400, size: 22),
-                                tooltip: 'حذف الصنف',
-                                onPressed: () => _confirmDeleteCategory(context, cat),
+                              const SizedBox(width: 6),
+                              Icon(
+                                isExpanded
+                                    ? Icons.keyboard_arrow_up_rounded
+                                    : Icons.keyboard_arrow_down_rounded,
+                                color: Colors.grey.shade600,
+                                size: 24,
                               ),
                             ],
                           ),
-                          const SizedBox(height: 10),
-                          const Divider(height: 1),
-                          const SizedBox(height: 10),
 
-                          // عرض مكونات الطقم كقطع أنيقة ومميزة مع أعدادها التأسيسية
-                          const Text(
-                            'قطع ومكونات الطقم الواحد:',
-                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppTheme.primaryNavy),
-                          ),
-                          const SizedBox(height: 8),
+                          // التفاصيل الكاملة وأزرار التعديل والحذف عند التوسيع فقط
+                          if (isExpanded) ...[
+                            const SizedBox(height: 10),
+                            const Divider(height: 1),
+                            const SizedBox(height: 10),
 
-                          if (comps.isEmpty)
-                            const Text('لا توجد قطع مسجلة لهذا الطقم', style: TextStyle(color: Colors.grey, fontSize: 12))
-                          else
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: comps.map((c) {
-                                final pieceName = (c['name'] ?? '').toString();
-                                final int baseQ = (c['base_qty'] is int)
-                                    ? c['base_qty'] as int
-                                    : ((c['qty'] is int) ? c['qty'] as int : (int.tryParse(c['qty']?.toString() ?? '1') ?? 1));
-                                return Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                  decoration: BoxDecoration(
-                                    color: AppTheme.primaryNavy.withValues(alpha: 0.05),
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(color: AppTheme.primaryNavy.withValues(alpha: 0.15)),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      const Icon(Icons.chair_rounded, size: 14, color: AppTheme.royalGold),
-                                      const SizedBox(width: 6),
-                                      Text(
-                                        'عدد $baseQ $pieceName',
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 13,
-                                          color: AppTheme.primaryNavy,
+                            const Text(
+                              'قطع ومكونات الطقم الواحد (التأسيسية):',
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: AppTheme.primaryNavy),
+                            ),
+                            const SizedBox(height: 8),
+
+                            if (comps.isEmpty)
+                              const Text('لا توجد قطع مسجلة لهذا الطقم', style: TextStyle(color: Colors.grey, fontSize: 12))
+                            else
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: comps.map((c) {
+                                  final pieceName = (c['name'] ?? '').toString();
+                                  final int baseQ = (c['base_qty'] is int)
+                                      ? c['base_qty'] as int
+                                      : ((c['qty'] is int) ? c['qty'] as int : (int.tryParse(c['qty']?.toString() ?? '1') ?? 1));
+                                  return Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: AppTheme.primaryNavy.withValues(alpha: 0.05),
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(color: AppTheme.primaryNavy.withValues(alpha: 0.15)),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(Icons.chair_rounded, size: 14, color: AppTheme.royalGold),
+                                        const SizedBox(width: 6),
+                                        Text(
+                                          'عدد $baseQ $pieceName',
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 13,
+                                            color: AppTheme.primaryNavy,
+                                          ),
                                         ),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              }).toList(),
-                            ),
-                          const SizedBox(height: 8),
+                                      ],
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                            const SizedBox(height: 12),
 
-                          // شريط معلومات توضيحي للمخزن
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: Colors.amber.shade50,
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Row(
+                            Row(
                               children: [
-                                Icon(Icons.info_outline, size: 14, color: Colors.amber.shade900),
-                                const SizedBox(width: 6),
-                                Text(
-                                  'رصيد هذا الطقم بالمخزن: ${cat['stock_qty']} طقم',
-                                  style: TextStyle(fontSize: 11, color: Colors.amber.shade900, fontWeight: FontWeight.bold),
+                                Expanded(
+                                  child: ElevatedButton.icon(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: AppTheme.primaryNavy,
+                                      foregroundColor: AppTheme.royalGold,
+                                      padding: const EdgeInsets.symmetric(vertical: 10),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                    ),
+                                    onPressed: () => _openEditDialog(cat),
+                                    icon: const Icon(Icons.edit_outlined, size: 18),
+                                    label: const Text('تعديل الصنف ومكوناته', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                IconButton(
+                                  icon: Icon(Icons.delete_outline, color: Colors.red.shade400, size: 22),
+                                  tooltip: 'حذف الصنف',
+                                  onPressed: () => _confirmDeleteCategory(context, cat),
                                 ),
                               ],
                             ),
-                          ),
+                          ],
                         ],
                       ),
                     ),

@@ -1555,11 +1555,11 @@ class _UpholstererScreenState extends State<UpholstererScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                // صف الملخص الرئيسي (دائماً ظاهر)
+                                // صف الملخص الرئيسي (دائماً ظاهر) مع زر استلام مباشر قبل التوسع والسهم الجانبي للتوسيع
                                 Row(
                                   children: [
                                     Container(
-                                      padding: const EdgeInsets.all(8),
+                                      padding: const EdgeInsets.all(7),
                                       decoration: BoxDecoration(
                                         color: isDone ? Colors.green.shade50 : AppTheme.primaryNavy.withValues(alpha: 0.08),
                                         borderRadius: BorderRadius.circular(10),
@@ -1567,28 +1567,28 @@ class _UpholstererScreenState extends State<UpholstererScreen> {
                                       child: Icon(
                                         Icons.weekend_rounded,
                                         color: isDone ? Colors.green.shade700 : AppTheme.primaryNavy,
-                                        size: 24,
+                                        size: 21,
                                       ),
                                     ),
-                                    const SizedBox(width: 10),
+                                    const SizedBox(width: 8),
                                     Expanded(
                                       child: Column(
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
-                                          Row(
+                                          Wrap(
+                                            spacing: 6,
+                                            runSpacing: 3,
+                                            crossAxisAlignment: WrapCrossAlignment.center,
                                             children: [
-                                              Expanded(
-                                                child: Text(
-                                                  'طقم: ${b['category_name']}',
-                                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppTheme.primaryNavy),
-                                                  overflow: TextOverflow.ellipsis,
-                                                ),
+                                              Text(
+                                                'طقم: ${b['category_name']}',
+                                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppTheme.primaryNavy),
                                               ),
                                               Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                                                 decoration: BoxDecoration(
                                                   color: isDone ? Colors.green.shade50 : Colors.amber.shade50,
-                                                  borderRadius: BorderRadius.circular(16),
+                                                  borderRadius: BorderRadius.circular(14),
                                                   border: Border.all(
                                                     color: isDone ? Colors.green : Colors.amber.shade700,
                                                   ),
@@ -1596,36 +1596,71 @@ class _UpholstererScreenState extends State<UpholstererScreen> {
                                                 child: Text(
                                                   isDone ? 'مكتمل' : 'متبقي ${bSetsRem > 0 ? '$bSetsRem طقم' : '$rem قطعة'}',
                                                   style: TextStyle(
-                                                    fontSize: 11,
+                                                    fontSize: 10.5,
                                                     fontWeight: FontWeight.bold,
                                                     color: isDone ? Colors.green.shade800 : Colors.amber.shade900,
                                                   ),
                                                 ),
                                               ),
-                                          ],
-                                        ),
-                                        const SizedBox(height: 3),
-                                        Row(
-                                          children: [
-                                            Text(
-                                              'المنجد: ${b['upholsterer_name']}',
-                                              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.brown),
-                                            ),
-                                            const SizedBox(width: 8),
-                                            Text(
-                                              '| الأطقم: ${(b['sets_received'] as int?) ?? 0}/${(b['sets_sent'] as int?) ?? 1} | القطع: $rec/$sent',
-                                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey.shade800),
-                                            ),
-                                          ],
-                                        ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 3),
+                                          Wrap(
+                                            spacing: 6,
+                                            runSpacing: 2,
+                                            children: [
+                                              Text(
+                                                'المنجد: ${b['upholsterer_name']}',
+                                                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12.5, color: Colors.brown),
+                                              ),
+                                              Text(
+                                                '| الأطقم: ${(b['sets_received'] as int?) ?? 0}/${(b['sets_sent'] as int?) ?? 1} | القطع: $rec/$sent',
+                                                style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Colors.grey.shade800),
+                                              ),
+                                            ],
+                                          ),
                                         ],
                                       ),
                                     ),
                                     const SizedBox(width: 6),
-                                    Icon(
-                                      isExpanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
-                                      color: Colors.grey.shade600,
-                                      size: 26,
+                                    ElevatedButton.icon(
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: isDone ? Colors.green.shade700 : AppTheme.primaryNavy,
+                                        foregroundColor: isDone ? Colors.white : AppTheme.royalGold,
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                                        minimumSize: Size.zero,
+                                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                      ),
+                                      onPressed: () => _openReceiveModal(b),
+                                      icon: Icon(
+                                        isDone ? Icons.check_circle_outline : Icons.assignment_turned_in_rounded,
+                                        size: 16,
+                                      ),
+                                      label: Text(
+                                        isDone ? 'تفاصيل' : 'استلام',
+                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 2),
+                                    IconButton(
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                                      tooltip: isExpanded ? 'طي التفاصيل' : 'توسيع التفاصيل',
+                                      icon: Icon(
+                                        isExpanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
+                                        color: Colors.grey.shade700,
+                                        size: 25,
+                                      ),
+                                      onPressed: () {
+                                        setState(() {
+                                          if (isExpanded) {
+                                            _expandedBatchIds.remove(batchId);
+                                          } else {
+                                            _expandedBatchIds.add(batchId);
+                                          }
+                                        });
+                                      },
                                     ),
                                   ],
                                 ),
