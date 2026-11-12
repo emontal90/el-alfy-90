@@ -29,6 +29,7 @@ class _PieceEditItem {
 
 class _ShowroomStockTabState extends State<ShowroomStockTab> {
   List<Map<String, dynamic>> _categories = [];
+  final Set<int> _expandedCategoryIds = {};
 
   @override
   void initState() {
@@ -945,310 +946,336 @@ class _ShowroomStockTabState extends State<ShowroomStockTab> {
               }
 
               final int qty = completeSets;
+              final int catId = (cat['id'] as int?) ?? i;
+              final bool isExpanded = _expandedCategoryIds.contains(catId);
+              final int totalStockPieces = comps.fold<int>(
+                0,
+                (sum, c) => sum + ((c['qty'] is int) ? c['qty'] as int : (int.tryParse(c['qty']?.toString() ?? '0') ?? 0)),
+              );
 
               return Card(
-                elevation: 2.5,
-                margin: const EdgeInsets.symmetric(vertical: 8),
+                elevation: isExpanded ? 3 : 1.5,
+                margin: const EdgeInsets.symmetric(vertical: 5),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
                   side: BorderSide(
-                    color: qty > 0 ? AppTheme.royalGold.withValues(alpha: 0.4) : Colors.grey.shade300,
-                    width: 1.2,
+                    color: isExpanded
+                        ? AppTheme.royalGold
+                        : (qty > 0 ? AppTheme.royalGold.withValues(alpha: 0.4) : Colors.grey.shade300),
+                    width: isExpanded ? 1.5 : 1.2,
                   ),
                 ),
-                child: Padding(
-                  padding: const EdgeInsets.all(14),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      // الصف الأول: اسم الطقم + بادج رصيد الأطقم + بادج الرصيد الفردي
-                      Row(
-                        children: [
-                          // 1. بادج رصيد الأطقم الكاملة
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: completeSets > 0
-                                    ? [AppTheme.primaryNavy, const Color(0xFF2B5282)]
-                                    : [Colors.grey.shade700, Colors.grey.shade600],
-                              ),
-                              borderRadius: BorderRadius.circular(12),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.1),
-                                  blurRadius: 4,
-                                  offset: const Offset(0, 2),
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  onTap: () {
+                    setState(() {
+                      if (isExpanded) {
+                        _expandedCategoryIds.remove(catId);
+                      } else {
+                        _expandedCategoryIds.add(catId);
+                      }
+                    });
+                  },
+                  borderRadius: BorderRadius.circular(16),
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: isExpanded ? 12 : 10),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // الصف الأول (ملخص مضغوط): بادج الأطقم + بادج الفردي + اسم الصنف + سهم التوسيع
+                        Row(
+                          children: [
+                            // 1. بادج رصيد الأطقم الكاملة
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: completeSets > 0
+                                      ? [AppTheme.primaryNavy, const Color(0xFF2B5282)]
+                                      : [Colors.grey.shade700, Colors.grey.shade600],
                                 ),
-                              ],
-                            ),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Text(
-                                  'رصيد الأطقم',
-                                  style: TextStyle(fontSize: 10, color: AppTheme.royalGold, fontWeight: FontWeight.bold),
-                                ),
-                                Text(
-                                  '$completeSets',
-                                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
-                                ),
-                                const Text('طقم كامل', style: TextStyle(fontSize: 9, color: Colors.white70)),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-
-                          // 2. بادج الرصيد الفردي (اضغط لعرض تفاصيل القطع الفردية)
-                          Material(
-                            color: Colors.transparent,
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(12),
-                              onTap: () {
-                                _showIndividualPiecesDialog(
-                                  context: context,
-                                  setName: (cat['name'] ?? '').toString(),
-                                  completeSets: completeSets,
-                                  totalExcess: individualPiecesCount,
-                                  excessPieces: excessPieces,
-                                );
-                              },
-                              child: Tooltip(
-                                message: 'اضغط لعرض تفاصيل القطع الفردية الزائدة',
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
-                                  decoration: BoxDecoration(
-                                    gradient: LinearGradient(
-                                      colors: individualPiecesCount > 0
-                                          ? [const Color(0xFFD97706), const Color(0xFFB45309)]
-                                          : [Colors.blueGrey.shade800, Colors.blueGrey.shade700],
-                                    ),
-                                    borderRadius: BorderRadius.circular(12),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withValues(alpha: 0.1),
-                                        blurRadius: 4,
-                                        offset: const Offset(0, 2),
-                                      ),
-                                    ],
+                                borderRadius: BorderRadius.circular(10),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.1),
+                                    blurRadius: 3,
+                                    offset: const Offset(0, 1),
                                   ),
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.min,
+                                ],
+                              ),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Text(
+                                    'الأطقم',
+                                    style: TextStyle(fontSize: 9.5, color: AppTheme.royalGold, fontWeight: FontWeight.bold),
+                                  ),
+                                  Text(
+                                    '$completeSets',
+                                    style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.white),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+
+                            // 2. بادج الرصيد الفردي (اضغط لعرض تفاصيل القطع الفردية)
+                            Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(10),
+                                onTap: () {
+                                  _showIndividualPiecesDialog(
+                                    context: context,
+                                    setName: (cat['name'] ?? '').toString(),
+                                    completeSets: completeSets,
+                                    totalExcess: individualPiecesCount,
+                                    excessPieces: excessPieces,
+                                  );
+                                },
+                                child: Tooltip(
+                                  message: 'اضغط لعرض تفاصيل القطع الفردية الزائدة',
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      gradient: LinearGradient(
+                                        colors: individualPiecesCount > 0
+                                            ? [const Color(0xFFD97706), const Color(0xFFB45309)]
+                                            : [Colors.blueGrey.shade800, Colors.blueGrey.shade700],
+                                      ),
+                                      borderRadius: BorderRadius.circular(10),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withValues(alpha: 0.1),
+                                          blurRadius: 3,
+                                          offset: const Offset(0, 1),
+                                        ),
+                                      ],
+                                    ),
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Text(
+                                          'فردي',
+                                          style: TextStyle(fontSize: 9.5, color: Colors.white, fontWeight: FontWeight.bold),
+                                        ),
+                                        Text(
+                                          '$individualPiecesCount',
+                                          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.white),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+
+                            // اسم الصنف وحالة التوفر + إجمالي القطع
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    cat['name'],
+                                    style: const TextStyle(
+                                      fontSize: 15.5,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppTheme.primaryNavy,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  const SizedBox(height: 3),
+                                  Wrap(
+                                    spacing: 6,
+                                    runSpacing: 3,
+                                    crossAxisAlignment: WrapCrossAlignment.center,
                                     children: [
-                                      const Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Text(
-                                            'الرصيد الفردي',
-                                            style: TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.bold),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: completeSets > 0
+                                              ? Colors.green.shade50
+                                              : (individualPiecesCount > 0 ? Colors.amber.shade50 : Colors.red.shade50),
+                                          borderRadius: BorderRadius.circular(6),
+                                          border: Border.all(
+                                            color: completeSets > 0
+                                                ? Colors.green.shade300
+                                                : (individualPiecesCount > 0 ? Colors.amber.shade300 : Colors.red.shade300),
                                           ),
-                                          SizedBox(width: 2),
-                                          Icon(Icons.touch_app, size: 10, color: Colors.white70),
-                                        ],
+                                        ),
+                                        child: Text(
+                                          completeSets > 0
+                                              ? 'جاهز ($completeSets طقم${individualPiecesCount > 0 ? " + $individualPiecesCount فردي" : ""})'
+                                              : (individualPiecesCount > 0 ? '$individualPiecesCount قطع فردية' : 'رصيد صفر'),
+                                          style: TextStyle(
+                                            fontSize: 10.5,
+                                            fontWeight: FontWeight.bold,
+                                            color: completeSets > 0
+                                                ? Colors.green.shade800
+                                                : (individualPiecesCount > 0 ? Colors.amber.shade900 : Colors.red.shade800),
+                                          ),
+                                        ),
                                       ),
                                       Text(
-                                        '$individualPiecesCount',
-                                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+                                        '($totalStockPieces قطعة)',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.brown.shade700,
+                                        ),
                                       ),
-                                      const Text('قطع زائدة', style: TextStyle(fontSize: 9, color: Colors.white70)),
                                     ],
                                   ),
-                                ),
+                                ],
                               ),
                             ),
-                          ),
-                          const SizedBox(width: 10),
 
-                          // اسم الصنف وحالة التوفر
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  cat['name'],
-                                  style: const TextStyle(
-                                    fontSize: 17,
-                                    fontWeight: FontWeight.bold,
-                                    color: AppTheme.primaryNavy,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
+                            const SizedBox(width: 4),
+                            Icon(
+                              isExpanded
+                                  ? Icons.keyboard_arrow_up_rounded
+                                  : Icons.keyboard_arrow_down_rounded,
+                              color: Colors.grey.shade600,
+                              size: 24,
+                            ),
+                          ],
+                        ),
+
+                        // التفاصيل الكاملة وأزرار التعديل تظهر عند التوسيع فقط
+                        if (isExpanded) ...[
+                          const SizedBox(height: 10),
+                          const Divider(height: 1),
+                          const SizedBox(height: 10),
+
+                          Row(
+                            children: [
+                              const Expanded(
+                                child: Text(
+                                  'قطع الطقم ورصيدها الفعلي بالمخزن:',
+                                  style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: AppTheme.primaryNavy),
                                 ),
-                                const SizedBox(height: 4),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                              ),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.brown.withValues(alpha: 0.08),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  'إجمالي القطع: $totalStockPieces قطعة',
+                                  style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Colors.brown),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+
+                          if (comps.isEmpty)
+                            const Text('لم يتم سرد قطع بعد لهذا الطقم', style: TextStyle(color: Colors.grey, fontSize: 12))
+                          else
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: comps.map((c) {
+                                final String pieceName = (c['name'] ?? '').toString();
+                                final int pieceCount = (c['qty'] is int)
+                                    ? c['qty'] as int
+                                    : (int.tryParse(c['qty']?.toString() ?? '0') ?? 0);
+
+                                return Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                                   decoration: BoxDecoration(
-                                    color: completeSets > 0 ? Colors.green.shade50 : (individualPiecesCount > 0 ? Colors.amber.shade50 : Colors.red.shade50),
-                                    borderRadius: BorderRadius.circular(6),
+                                    color: pieceCount > 0 ? Colors.blue.shade50 : Colors.grey.shade100,
+                                    borderRadius: BorderRadius.circular(10),
                                     border: Border.all(
-                                      color: completeSets > 0 ? Colors.green.shade300 : (individualPiecesCount > 0 ? Colors.amber.shade300 : Colors.red.shade300),
+                                      color: pieceCount > 0 ? Colors.blue.shade200 : Colors.grey.shade300,
                                     ),
                                   ),
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       Icon(
-                                        completeSets > 0 ? Icons.check_circle_rounded : (individualPiecesCount > 0 ? Icons.timelapse_rounded : Icons.info_outline_rounded),
-                                        size: 13,
-                                        color: completeSets > 0 ? Colors.green.shade800 : (individualPiecesCount > 0 ? Colors.amber.shade900 : Colors.red.shade800),
+                                        Icons.chair_rounded,
+                                        size: 15,
+                                        color: pieceCount > 0 ? AppTheme.primaryNavy : Colors.grey,
                                       ),
-                                      const SizedBox(width: 4),
-                                      Flexible(
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        pieceName,
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 13,
+                                          color: pieceCount > 0 ? AppTheme.primaryNavy : Colors.grey.shade700,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: pieceCount > 0 ? AppTheme.primaryNavy : Colors.grey.shade400,
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
                                         child: Text(
-                                          completeSets > 0
-                                              ? 'جاهز ($completeSets طقم ${individualPiecesCount > 0 ? "+ $individualPiecesCount فردي" : ""})'
-                                              : (individualPiecesCount > 0 ? 'قطع فردية فقط ($individualPiecesCount قطعة)' : 'رصيد الأطقم: صفر'),
-                                          maxLines: 2,
-                                          style: TextStyle(
-                                            fontSize: 11,
+                                          '$pieceCount',
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 12,
                                             fontWeight: FontWeight.bold,
-                                            color: completeSets > 0 ? Colors.green.shade800 : (individualPiecesCount > 0 ? Colors.amber.shade900 : Colors.red.shade800),
                                           ),
-                                          overflow: TextOverflow.ellipsis,
                                         ),
                                       ),
                                     ],
                                   ),
-                                ),
-                              ],
+                                );
+                              }).toList(),
                             ),
-                          ),
+                          const SizedBox(height: 12),
 
-                          // زر حذف الصنف
-                          IconButton(
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
-                            icon: Icon(Icons.delete_outline, color: Colors.red.shade400, size: 21),
-                            tooltip: 'حذف الصنف من المخزن',
-                            onPressed: () => _confirmDeleteCategory(context, cat),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      const Divider(height: 1),
-                      const SizedBox(height: 10),
-
-                      // الصف الثاني: عرض قطع الطقم بالمخزن بشكل لائق ومميز
-                      Row(
-                        children: [
-                          const Expanded(
-                            child: Text(
-                              'قطع الطقم ورصيدها الفعلي بالمخزن:',
-                              style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: AppTheme.primaryNavy),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: Colors.brown.withValues(alpha: 0.08),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              'إجمالي القطع: ${comps.fold<int>(0, (sum, c) => sum + ((c['qty'] as int?) ?? 0))} قطعة',
-                              style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Colors.brown),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-
-                      if (comps.isEmpty)
-                        const Text('لم يتم سرد قطع بعد لهذا الطقم', style: TextStyle(color: Colors.grey, fontSize: 12))
-                      else
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: comps.map((c) {
-                            final String pieceName = (c['name'] ?? '').toString();
-                            final int pieceCount = (c['qty'] is int)
-                                ? c['qty'] as int
-                                : (int.tryParse(c['qty']?.toString() ?? '0') ?? 0);
-
-                            return Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: pieceCount > 0 ? Colors.blue.shade50 : Colors.grey.shade100,
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(
-                                  color: pieceCount > 0 ? Colors.blue.shade200 : Colors.grey.shade300,
+                          // أزرار العمليات بالأسفل
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: AppTheme.primaryNavy,
+                                    side: const BorderSide(color: AppTheme.primaryNavy),
+                                    padding: const EdgeInsets.symmetric(vertical: 10),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                  ),
+                                  onPressed: () => _openMovementsModal(cat),
+                                  icon: const Icon(Icons.receipt_long_rounded, size: 18),
+                                  label: const Text('كشف الحركات', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                                 ),
                               ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    Icons.chair_rounded,
-                                    size: 15,
-                                    color: pieceCount > 0 ? AppTheme.primaryNavy : Colors.grey,
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: ElevatedButton.icon(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppTheme.primaryNavy,
+                                    foregroundColor: AppTheme.royalGold,
+                                    padding: const EdgeInsets.symmetric(vertical: 10),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                                   ),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    pieceName,
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 13,
-                                      color: pieceCount > 0 ? AppTheme.primaryNavy : Colors.grey.shade700,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: pieceCount > 0 ? AppTheme.primaryNavy : Colors.grey.shade400,
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: Text(
-                                      '$pieceCount',
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                ],
+                                  onPressed: () => _openEditDialog(cat),
+                                  icon: const Icon(Icons.edit, size: 18),
+                                  label: const Text('تعديل المخزون', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                ),
                               ),
-                            );
-                          }).toList(),
-                        ),
-                      const SizedBox(height: 14),
-
-                      // أزرار العمليات بالأسفل
-                      Row(
-                        children: [
-                          // زر كشف حركات الطقم في المخزن
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: AppTheme.primaryNavy,
-                                side: const BorderSide(color: AppTheme.primaryNavy),
-                                padding: const EdgeInsets.symmetric(vertical: 10),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              const SizedBox(width: 4),
+                              IconButton(
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(minWidth: 38, minHeight: 38),
+                                icon: Icon(Icons.delete_outline, color: Colors.red.shade400, size: 22),
+                                tooltip: 'حذف الصنف من المخزن',
+                                onPressed: () => _confirmDeleteCategory(context, cat),
                               ),
-                              onPressed: () => _openMovementsModal(cat),
-                              icon: const Icon(Icons.receipt_long_rounded, size: 18),
-                              label: const Text('كشف الحركات', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-
-                          // زر تعديل المخزون
-                          Expanded(
-                            child: ElevatedButton.icon(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppTheme.primaryNavy,
-                                foregroundColor: AppTheme.royalGold,
-                                padding: const EdgeInsets.symmetric(vertical: 10),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                              ),
-                              onPressed: () => _openEditDialog(cat),
-                              icon: const Icon(Icons.edit, size: 18),
-                              label: const Text('تعديل المخزون', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                            ),
+                            ],
                           ),
                         ],
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               );

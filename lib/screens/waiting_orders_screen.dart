@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart' as intl;
 import '../components/app_logo.dart';
@@ -19,6 +20,7 @@ class WaitingOrdersScreen extends StatefulWidget {
 
 class _WaitingOrdersScreenState extends State<WaitingOrdersScreen> {
   List<Map<String, dynamic>> _orders = [];
+  Map<int, List<dynamic>> _categoryCompsById = {};
   final Set<int> _expandedOrderIds = {};
   String? _filterDate;
   String _filterCustomer = '';
@@ -42,8 +44,23 @@ class _WaitingOrdersScreenState extends State<WaitingOrdersScreen> {
     final db = await DBHelper.instance.database;
     final data = await db.query('orders',
         where: "status = 'waiting'", orderBy: 'delivery_date ASC');
+    final cats = await db.query('categories', columns: ['id', 'components_json']);
+    final Map<int, List<dynamic>> compsMap = {};
+    for (final c in cats) {
+      final cid = c['id'] as int?;
+      if (cid == null) continue;
+      try {
+        final decoded = jsonDecode((c['components_json'] ?? '[]').toString());
+        if (decoded is List) {
+          compsMap[cid] = decoded;
+        }
+      } catch (_) {}
+    }
     if (mounted) {
-      setState(() => _orders = data);
+      setState(() {
+        _orders = data;
+        _categoryCompsById = compsMap;
+      });
     }
   }
 
@@ -390,12 +407,30 @@ class _WaitingOrdersScreenState extends State<WaitingOrdersScreen> {
       rawCatComps,
       setsCount: orderSets,
     );
+    final orderSummary = OrderDeliveryHelper.summarizeOrder(
+      orderComps: orderPieces,
+      rawCategoryComps: rawCatComps,
+      fallbackSetsCount: orderSets,
+    );
+    final int maxOrderSets = orderSummary.sets;
+    final int totalAvailablePieces = orderSummary.totalPieces;
 
-    final Map<String, int> selectedQty = {
-      for (final p in orderPieces) (p['name'] as String): (p['qty'] as int),
+    int deliverSets = 0;
+    final Map<String, int> extraQty = {
+      for (final p in orderPieces) (p['name'] as String): 0,
     };
-    final int totalAvailablePieces =
-        orderPieces.fold<int>(0, (sum, p) => sum + ((p['qty'] as int?) ?? 0));
+
+    void clampExtrasToRemainingSets() {
+      for (final p in orderPieces) {
+        final name = p['name'] as String;
+        final maxQ = p['qty'] as int;
+        final baseQ = (p['base_qty'] as int?) ?? 0;
+        final maxExtra = math.max(0, maxQ - deliverSets * baseQ);
+        if ((extraQty[name] ?? 0) > maxExtra) {
+          extraQty[name] = maxExtra;
+        }
+      }
+    }
 
     bool isPartialMode = false;
     bool isSaving = false;
@@ -411,12 +446,38 @@ class _WaitingOrdersScreenState extends State<WaitingOrdersScreen> {
       ),
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setModalState) {
-          final int currentDeliverCount = isPartialMode
-              ? selectedQty.values.fold<int>(0, (sum, q) => sum + q)
-              : totalAvailablePieces;
+          final Map<String, int> partialDeliverMap = isPartialMode
+              ? OrderDeliveryHelper.buildDeliverQuantities(
+                  orderPieces: orderPieces,
+                  deliverSets: deliverSets,
+                  extraPieceQuantities: extraQty,
+                )
+              : {
+                  for (final p in orderPieces) (p['name'] as String): (p['qty'] as int),
+                };
 
+          final livePreview = OrderDeliveryHelper.computeDelivery(
+            orderPieces: orderPieces,
+            deliverQuantities: partialDeliverMap,
+            rawCategoryComps: rawCatComps,
+            fallbackCategoryStock: oldCatStock,
+          );
+
+          final int currentDeliverCount = livePreview.totalDeliveredPieces;
           final bool canSubmit = !isSaving &&
               (orderPieces.isEmpty || currentDeliverCount > 0);
+
+          final String deliveredLabel = OrderSetSummary(
+            sets: livePreview.deliveredSets,
+            individualPieces: livePreview.deliveredIndividualPieces,
+            totalPieces: livePreview.totalDeliveredPieces,
+          ).toOrangeBadgeLabel() ?? '0';
+
+          final String remainingLabel = OrderSetSummary(
+            sets: livePreview.remainingOrderSets,
+            individualPieces: livePreview.remainingIndividualPieces,
+            totalPieces: livePreview.totalRemainingPieces,
+          ).toOrangeBadgeLabel() ?? 'لا شيء';
 
           final bottomSafe = MediaQuery.of(ctx).viewPadding.bottom;
 
@@ -492,9 +553,6 @@ class _WaitingOrdersScreenState extends State<WaitingOrdersScreen> {
                               : (_) {
                                   setModalState(() {
                                     isPartialMode = false;
-                                    for (final p in orderPieces) {
-                                      selectedQty[p['name'] as String] = p['qty'] as int;
-                                    }
                                   });
                                 },
                         ),
@@ -516,7 +574,15 @@ class _WaitingOrdersScreenState extends State<WaitingOrdersScreen> {
                           showCheckmark: false,
                           onSelected: isSaving
                               ? null
-                              : (_) => setModalState(() => isPartialMode = true),
+                              : (_) => setModalState(() {
+                                    if (!isPartialMode) {
+                                      deliverSets = 0;
+                                      for (final p in orderPieces) {
+                                        extraQty[p['name'] as String] = 0;
+                                      }
+                                    }
+                                    isPartialMode = true;
+                                  }),
                         ),
                       ),
                     ],
@@ -525,7 +591,7 @@ class _WaitingOrdersScreenState extends State<WaitingOrdersScreen> {
 
                 const SizedBox(height: 10),
 
-                // 3. ملخص مختصر أو قائمة قطع مضغوطة بارتفاع محكوم حتى يبقى زر التسليم ظاهراً دائماً
+                // 3. ملخص مختصر أو اختيار عدد الأطقم + القطع الفردية بارتفاع محكوم
                 if (!isPartialMode)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -542,12 +608,97 @@ class _WaitingOrdersScreenState extends State<WaitingOrdersScreen> {
                     ),
                   )
                 else ...[
+                  if (maxOrderSets > 0) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryNavy.withValues(alpha: 0.06),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: deliverSets > 0
+                              ? AppTheme.primaryNavy
+                              : AppTheme.primaryNavy.withValues(alpha: 0.2),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.layers_rounded, size: 19, color: AppTheme.primaryNavy),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'تسليم أطقم كاملة:',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
+                                    color: AppTheme.primaryNavy,
+                                  ),
+                                ),
+                                Text(
+                                  'المتاح بالطلب: $maxOrderSets طقم',
+                                  style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                            icon: Icon(
+                              Icons.remove_circle_outline,
+                              color: deliverSets > 0 ? Colors.red.shade700 : Colors.grey,
+                              size: 23,
+                            ),
+                            onPressed: (!isSaving && deliverSets > 0)
+                                ? () => setModalState(() {
+                                      deliverSets--;
+                                      clampExtrasToRemainingSets();
+                                    })
+                                : null,
+                          ),
+                          Container(
+                            constraints: const BoxConstraints(minWidth: 36),
+                            alignment: Alignment.center,
+                            child: Text(
+                              '$deliverSets طقم',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w900,
+                                fontSize: 14,
+                                color: AppTheme.primaryNavy,
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                            icon: Icon(
+                              Icons.add_circle_outline,
+                              color: deliverSets < maxOrderSets ? Colors.green.shade700 : Colors.grey,
+                              size: 23,
+                            ),
+                            onPressed: (!isSaving && deliverSets < maxOrderSets)
+                                ? () => setModalState(() {
+                                      deliverSets++;
+                                      clampExtrasToRemainingSets();
+                                    })
+                                : null,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
-                        'حدد القطع المسلمة الآن:',
-                        style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold),
+                      Text(
+                        maxOrderSets > 0
+                            ? 'قطع فردية إضافية (تُخصم من المتبقي):'
+                            : 'حدد القطع المسلمة الآن:',
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
                       ),
                       Row(
                         children: [
@@ -561,8 +712,12 @@ class _WaitingOrdersScreenState extends State<WaitingOrdersScreen> {
                                 ? null
                                 : () {
                                     setModalState(() {
+                                      deliverSets = maxOrderSets;
                                       for (final p in orderPieces) {
-                                        selectedQty[p['name'] as String] = p['qty'] as int;
+                                        final name = p['name'] as String;
+                                        final maxQ = p['qty'] as int;
+                                        final baseQ = (p['base_qty'] as int?) ?? 0;
+                                        extraQty[name] = math.max(0, maxQ - deliverSets * baseQ);
                                       }
                                     });
                                   },
@@ -579,8 +734,9 @@ class _WaitingOrdersScreenState extends State<WaitingOrdersScreen> {
                                 ? null
                                 : () {
                                     setModalState(() {
+                                      deliverSets = 0;
                                       for (final p in orderPieces) {
-                                        selectedQty[p['name'] as String] = 0;
+                                        extraQty[p['name'] as String] = 0;
                                       }
                                     });
                                   },
@@ -593,7 +749,7 @@ class _WaitingOrdersScreenState extends State<WaitingOrdersScreen> {
                   const SizedBox(height: 6),
                   ConstrainedBox(
                     constraints: BoxConstraints(
-                      maxHeight: MediaQuery.sizeOf(ctx).height * 0.34,
+                      maxHeight: MediaQuery.sizeOf(ctx).height * 0.28,
                     ),
                     child: ListView.separated(
                       shrinkWrap: true,
@@ -603,15 +759,20 @@ class _WaitingOrdersScreenState extends State<WaitingOrdersScreen> {
                         final p = orderPieces[idx];
                         final name = p['name'] as String;
                         final maxQ = p['qty'] as int;
-                        final curQ = selectedQty[name] ?? 0;
+                        final baseQ = (p['base_qty'] as int?) ?? 0;
+                        final fromSets = deliverSets * baseQ;
+                        final remainingForExtra = math.max(0, maxQ - fromSets);
+                        final curExtra = (extraQty[name] ?? 0).clamp(0, remainingForExtra);
 
                         return Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                           decoration: BoxDecoration(
-                            color: curQ > 0 ? Colors.green.withValues(alpha: 0.05) : Colors.grey.shade50,
+                            color: (curExtra > 0 || fromSets > 0)
+                                ? Colors.green.withValues(alpha: 0.05)
+                                : Colors.grey.shade50,
                             borderRadius: BorderRadius.circular(10),
                             border: Border.all(
-                              color: curQ > 0
+                              color: (curExtra > 0 || fromSets > 0)
                                   ? Colors.green.withValues(alpha: 0.35)
                                   : Colors.grey.shade300,
                             ),
@@ -619,10 +780,24 @@ class _WaitingOrdersScreenState extends State<WaitingOrdersScreen> {
                           child: Row(
                             children: [
                               Expanded(
-                                child: Text(
-                                  '$name  (المتاح: $maxQ)',
-                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5),
-                                  overflow: TextOverflow.ellipsis,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      '$name  (المتبقي: $remainingForExtra)',
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    if (fromSets > 0)
+                                      Text(
+                                        'ضمن الأطقم المحددة: $fromSets قطعة',
+                                        style: TextStyle(
+                                          fontSize: 10.5,
+                                          color: Colors.green.shade800,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                  ],
                                 ),
                               ),
                               IconButton(
@@ -630,18 +805,18 @@ class _WaitingOrdersScreenState extends State<WaitingOrdersScreen> {
                                 constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                                 icon: Icon(
                                   Icons.remove_circle_outline,
-                                  color: curQ > 0 ? Colors.red.shade700 : Colors.grey,
+                                  color: curExtra > 0 ? Colors.red.shade700 : Colors.grey,
                                   size: 22,
                                 ),
-                                onPressed: (!isSaving && curQ > 0)
-                                    ? () => setModalState(() => selectedQty[name] = curQ - 1)
+                                onPressed: (!isSaving && curExtra > 0)
+                                    ? () => setModalState(() => extraQty[name] = curExtra - 1)
                                     : null,
                               ),
                               Container(
                                 constraints: const BoxConstraints(minWidth: 28),
                                 alignment: Alignment.center,
                                 child: Text(
-                                  '$curQ',
+                                  '$curExtra',
                                   style: const TextStyle(
                                     fontWeight: FontWeight.w900,
                                     fontSize: 15,
@@ -654,17 +829,35 @@ class _WaitingOrdersScreenState extends State<WaitingOrdersScreen> {
                                 constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                                 icon: Icon(
                                   Icons.add_circle_outline,
-                                  color: curQ < maxQ ? Colors.green.shade700 : Colors.grey,
+                                  color: curExtra < remainingForExtra ? Colors.green.shade700 : Colors.grey,
                                   size: 22,
                                 ),
-                                onPressed: (!isSaving && curQ < maxQ)
-                                    ? () => setModalState(() => selectedQty[name] = curQ + 1)
+                                onPressed: (!isSaving && curExtra < remainingForExtra)
+                                    ? () => setModalState(() => extraQty[name] = curExtra + 1)
                                     : null,
                               ),
                             ],
                           ),
                         );
                       },
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFD97706).withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(9),
+                      border: Border.all(color: const Color(0xFFD97706).withValues(alpha: 0.35)),
+                    ),
+                    child: Text(
+                      'المسلّم الآن: $deliveredLabel  |  المتبقي بالانتظار: $remainingLabel',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.amber.shade900,
+                      ),
                     ),
                   ),
                 ],
@@ -692,12 +885,7 @@ class _WaitingOrdersScreenState extends State<WaitingOrdersScreen> {
                             : () async {
                                 setModalState(() => isSaving = true);
                                 try {
-                                  final Map<String, int> deliverMap = isPartialMode
-                                      ? Map<String, int>.from(selectedQty)
-                                      : {
-                                          for (final p in orderPieces)
-                                            (p['name'] as String): (p['qty'] as int),
-                                        };
+                                  final Map<String, int> deliverMap = partialDeliverMap;
 
                                   final calc = OrderDeliveryHelper.computeDelivery(
                                     orderPieces: orderPieces,
@@ -718,7 +906,7 @@ class _WaitingOrdersScreenState extends State<WaitingOrdersScreen> {
                                         whereArgs: [order['id']],
                                       );
                                     } else {
-                                      // 1) تحديث طلب الانتظار بالقطع المتبقية فقط
+                                      // 1) تحديث طلب الانتظار بالقطع المتبقية وعدد الأطقم الكاملة المتبقي
                                       await txn.update(
                                         'orders',
                                         {
@@ -730,7 +918,7 @@ class _WaitingOrdersScreenState extends State<WaitingOrdersScreen> {
                                         whereArgs: [order['id']],
                                       );
 
-                                      // 2) تسجيل سجل للقطع المسلّمة في قائمة (تم التسليم)
+                                      // 2) تسجيل سجل للقطع والأطقم المسلّمة في قائمة (تم التسليم)
                                       final oldSpecs =
                                           (order['specs'] ?? '').toString().trim();
                                       final partialSpecs = oldSpecs.isEmpty
@@ -747,7 +935,7 @@ class _WaitingOrdersScreenState extends State<WaitingOrdersScreen> {
                                         'specs': partialSpecs,
                                         'delivery_date': todayStr,
                                         'order_type': order['order_type'],
-                                        'sets_count': 0,
+                                        'sets_count': calc.deliveredSets,
                                         'status': 'delivered',
                                         'created_at': order['created_at'] ?? todayStr,
                                       });
@@ -1038,6 +1226,7 @@ class _WaitingOrdersScreenState extends State<WaitingOrdersScreen> {
                         final bool isExpanded = _expandedOrderIds.contains(orderId);
                         return OrderCard(
                           order: order,
+                          categoryComponents: _categoryCompsById[order['category_id']],
                           collapsible: true,
                           isExpanded: isExpanded,
                           onToggleExpand: () {

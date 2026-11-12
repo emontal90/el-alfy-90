@@ -1,10 +1,12 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../core/app_theme.dart';
+import '../core/order_delivery_helper.dart';
 import '../core/stock_movement_helper.dart';
 
 class OrderCard extends StatelessWidget {
   final Map<String, dynamic> order;
+  final List<dynamic>? categoryComponents;
   final VoidCallback? onDeliverPressed;
   final VoidCallback? onEditPressed;
   final bool isDelivered;
@@ -15,6 +17,7 @@ class OrderCard extends StatelessWidget {
   const OrderCard({
     super.key,
     required this.order,
+    this.categoryComponents,
     this.onDeliverPressed,
     this.onEditPressed,
     this.isDelivered = false,
@@ -30,21 +33,19 @@ class OrderCard extends StatelessWidget {
       comps = jsonDecode(order['selected_components_json']);
     } catch (_) {}
 
-    int totalPieces = 0;
-    for (final c in comps) {
-      if (c is Map) {
-        totalPieces += (c['qty'] is int)
-            ? c['qty'] as int
-            : (int.tryParse(c['qty']?.toString() ?? '0') ?? 0);
-      }
-    }
-
     final createdAtRaw = order['created_at']?.toString() ?? '';
     final createdAtFormatted = createdAtRaw.isNotEmpty
         ? StockMovementHelper.formatDateString12(createdAtRaw)
         : '';
 
     final int? setsCount = (order['sets_count'] as int?);
+    final summary = OrderDeliveryHelper.summarizeOrder(
+      orderComps: comps,
+      rawCategoryComps: categoryComponents ?? const [],
+      fallbackSetsCount: setsCount ?? 0,
+    );
+    final String? orangeBadgeText = summary.toOrangeBadgeLabel();
+    final int totalPieces = summary.totalPieces;
     final String deliveryDateStr = order['delivery_date']?.toString() ?? 'غير محدد';
     final bool showDetails = !collapsible || isExpanded;
 
@@ -115,7 +116,7 @@ class OrderCard extends StatelessWidget {
                               ),
                             ),
                           ),
-                          if (setsCount != null && setsCount > 0)
+                          if (orangeBadgeText != null)
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
                               decoration: BoxDecoration(
@@ -123,7 +124,7 @@ class OrderCard extends StatelessWidget {
                                 borderRadius: BorderRadius.circular(5),
                               ),
                               child: Text(
-                                '$setsCount طقم',
+                                orangeBadgeText,
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontSize: 10,
@@ -253,7 +254,7 @@ class OrderCard extends StatelessWidget {
                             fontWeight: FontWeight.bold),
                       ),
                     ),
-                    if (setsCount != null && setsCount > 0)
+                    if (orangeBadgeText != null)
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                         decoration: BoxDecoration(
@@ -261,7 +262,7 @@ class OrderCard extends StatelessWidget {
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
-                          'عدد $setsCount طقم',
+                          orangeBadgeText,
                           style: const TextStyle(
                               color: Colors.white,
                               fontSize: 11,

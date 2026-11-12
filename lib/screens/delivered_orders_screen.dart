@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart' as intl;
 import '../components/app_logo.dart';
@@ -15,6 +16,7 @@ class DeliveredOrdersScreen extends StatefulWidget {
 
 class _DeliveredOrdersScreenState extends State<DeliveredOrdersScreen> {
   List<Map<String, dynamic>> _orders = [];
+  Map<int, List<dynamic>> _categoryCompsById = {};
   String _searchQuery = '';
   final TextEditingController _searchCtrl = TextEditingController();
   final Set<int> _expandedOrderIds = {};
@@ -41,7 +43,24 @@ class _DeliveredOrdersScreenState extends State<DeliveredOrdersScreen> {
   Future<void> _load() async {
     final db = await DBHelper.instance.database;
     final data = await db.query('orders', where: "status = 'delivered'", orderBy: 'id DESC');
-    if (mounted) setState(() => _orders = data);
+    final cats = await db.query('categories', columns: ['id', 'components_json']);
+    final Map<int, List<dynamic>> compsMap = {};
+    for (final c in cats) {
+      final cid = c['id'] as int?;
+      if (cid == null) continue;
+      try {
+        final decoded = jsonDecode((c['components_json'] ?? '[]').toString());
+        if (decoded is List) {
+          compsMap[cid] = decoded;
+        }
+      } catch (_) {}
+    }
+    if (mounted) {
+      setState(() {
+        _orders = data;
+        _categoryCompsById = compsMap;
+      });
+    }
   }
 
   /// تصفية الأوردرات المسلّمة حسب فترة التاريخ والبحث
@@ -404,6 +423,7 @@ class _DeliveredOrdersScreenState extends State<DeliveredOrdersScreen> {
                         final bool isExpanded = _expandedOrderIds.contains(orderId);
                         return OrderCard(
                           order: order,
+                          categoryComponents: _categoryCompsById[order['category_id']],
                           isDelivered: true,
                           collapsible: true,
                           isExpanded: isExpanded,
