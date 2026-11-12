@@ -6,6 +6,7 @@ import '../core/app_events.dart';
 import '../core/app_notification.dart';
 import '../core/app_theme.dart';
 import '../core/db_helper.dart';
+import '../core/order_delivery_helper.dart';
 
 class NewOrderScreen extends StatefulWidget {
   const NewOrderScreen({super.key});
@@ -21,6 +22,20 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
   int? _selectedCategoryId;
   int _orderSetsCount = 1;
   List<Map<String, dynamic>> _editableComponents = [];
+
+  bool _addFromOtherCategory = false;
+  int? _secondaryCategoryId;
+
+  List<Map<String, dynamic>> get _otherCategories =>
+      _categories.where((c) => c['id'] != _selectedCategoryId).toList();
+
+  Map<String, dynamic>? get _secondaryCategory {
+    try {
+      return _otherCategories.firstWhere((c) => c['id'] == _secondaryCategoryId);
+    } catch (_) {
+      return null;
+    }
+  }
 
   Map<String, dynamic>? get _selectedCustomer {
     try {
@@ -64,22 +79,88 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
       decoded = jsonDecode(cat['components_json']);
     } catch (_) {}
     _orderSetsCount = 1;
+    final preservedCrossPieces = _editableComponents
+        .where((c) => c['source_category_id'] != null && c['source_category_id'] != cat['id'])
+        .toList();
+    if (_secondaryCategoryId == cat['id']) {
+      _secondaryCategoryId = null;
+    }
     setState(() {
-      _editableComponents = decoded.map((e) {
-        final int baseQty = (e['base_qty'] is int)
-            ? e['base_qty']
-            : int.tryParse(e['base_qty']?.toString() ?? '') ??
-                ((e['qty'] is int) ? e['qty'] : int.tryParse(e['qty']?.toString() ?? '') ?? 1);
-        final int finalBase = baseQty > 0 ? baseQty : 1;
-        return {
-          'name': e['name'].toString(),
-          'base_qty': finalBase,
-          'qty': finalBase * _orderSetsCount,
-          'original_qty': finalBase,
+      _editableComponents = [
+        ...decoded.map((e) {
+          final int baseQty = (e['base_qty'] is int)
+              ? e['base_qty']
+              : int.tryParse(e['base_qty']?.toString() ?? '') ??
+                  ((e['qty'] is int) ? e['qty'] : int.tryParse(e['qty']?.toString() ?? '') ?? 1);
+          final int finalBase = baseQty > 0 ? baseQty : 1;
+          return {
+            'name': e['name'].toString(),
+            'base_qty': finalBase,
+            'qty': finalBase * _orderSetsCount,
+            'original_qty': finalBase,
+            'selected': true,
+            'is_custom': false,
+          };
+        }),
+        ...preservedCrossPieces,
+      ];
+    });
+  }
+
+  List<Map<String, dynamic>> _parseCategoryPieces(Map<String, dynamic> cat) {
+    List decoded = [];
+    try {
+      final raw = jsonDecode((cat['components_json'] ?? '[]').toString());
+      if (raw is List) decoded = raw;
+    } catch (_) {}
+    return decoded.whereType<Map>().map((e) {
+      final int stockQty = (e['qty'] is int)
+          ? e['qty'] as int
+          : (int.tryParse(e['qty']?.toString() ?? '0') ?? 0);
+      return {
+        'name': (e['name'] ?? '').toString(),
+        'stock_qty': stockQty,
+      };
+    }).where((e) => (e['name'] as String).isNotEmpty).toList();
+  }
+
+  int _getSecondaryPieceQty(int secCatId, String pieceName) {
+    for (final c in _editableComponents) {
+      if (c['source_category_id'] == secCatId &&
+          c['source_piece_name'] == pieceName) {
+        return (c['qty'] as int?) ?? 0;
+      }
+    }
+    return 0;
+  }
+
+  void _setSecondaryPieceQty(Map<String, dynamic> secCat, String pieceName, int newQty) {
+    final int secCatId = secCat['id'] as int;
+    final String secCatName = (secCat['name'] ?? '').toString();
+    setState(() {
+      final existingIdx = _editableComponents.indexWhere(
+        (c) => c['source_category_id'] == secCatId && c['source_piece_name'] == pieceName,
+      );
+      if (newQty <= 0) {
+        if (existingIdx != -1) {
+          _editableComponents.removeAt(existingIdx);
+        }
+      } else if (existingIdx != -1) {
+        _editableComponents[existingIdx]['qty'] = newQty;
+        _editableComponents[existingIdx]['selected'] = true;
+      } else {
+        _editableComponents.add({
+          'name': '$pieceName ($secCatName)',
+          'source_piece_name': pieceName,
+          'source_category_id': secCatId,
+          'source_category_name': secCatName,
+          'base_qty': 0,
+          'qty': newQty,
+          'original_qty': 0,
           'selected': true,
-          'is_custom': false,
-        };
-      }).toList();
+          'is_custom': true,
+        });
+      }
     });
   }
 
@@ -88,7 +169,7 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
     setState(() {
       _orderSetsCount = newCount;
       for (var c in _editableComponents) {
-        if (c['is_custom'] != true) {
+        if (c['is_custom'] != true && c['source_category_id'] == null) {
           final int baseQty = (c['base_qty'] as int?) ?? 1;
           c['qty'] = newCount * baseQty;
           c['selected'] = c['qty'] > 0;
@@ -255,6 +336,8 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
       setState(() {
         _selectedCategoryId = null;
         _editableComponents.clear();
+        _addFromOtherCategory = false;
+        _secondaryCategoryId = null;
       });
       if (mounted) {
         AppNotification.showInfo(context, 'تمت إزالة الصنف من الطلب');
@@ -273,12 +356,32 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
     }
     final chosenComps = _editableComponents
         .where((c) => (c['qty'] as int) > 0)
-        .map((c) => {'name': c['name'], 'qty': c['qty']})
+        .map((c) => {
+              'name': c['name'],
+              'qty': c['qty'],
+              'base_qty': c['base_qty'] ?? 0,
+              if (c['is_custom'] == true) 'is_custom': true,
+              if (c['source_category_id'] != null) 'source_category_id': c['source_category_id'],
+              if (c['source_category_name'] != null) 'source_category_name': c['source_category_name'],
+              if (c['source_piece_name'] != null) 'source_piece_name': c['source_piece_name'],
+            })
         .toList();
     if (chosenComps.isEmpty) {
       AppNotification.showError(context, 'يرجى تحديد قطعة واحدة على الأقل وزيادة عددها عن صفر');
       return;
     }
+
+    List primaryCatComps = const [];
+    try {
+      final decoded = jsonDecode((_selectedCategory!['components_json'] ?? '[]').toString());
+      if (decoded is List) primaryCatComps = decoded;
+    } catch (_) {}
+
+    final summary = OrderDeliveryHelper.summarizeOrder(
+      orderComps: chosenComps,
+      rawCategoryComps: primaryCatComps,
+      fallbackSetsCount: _orderSetsCount,
+    );
 
     final db = await DBHelper.instance.database;
     await db.insert('orders', {
@@ -290,7 +393,7 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
       'specs': _specsCtrl.text.trim(),
       'delivery_date': intl.DateFormat('yyyy-MM-dd').format(_deliveryDate),
       'order_type': _orderType,
-      'sets_count': _orderSetsCount > 0 ? _orderSetsCount : 1,
+      'sets_count': summary.sets,
       'status': 'waiting',
       'created_at': intl.DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now()),
     });
@@ -317,7 +420,7 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
         children: [
           // 1. اختيار العميل
           DropdownButtonFormField<int>(
-            value: _selectedCustomerId,
+            initialValue: _selectedCustomerId,
             decoration: const InputDecoration(
               labelText: 'اسم الزبون / العميل *',
               hintText: 'اختر العميل من القائمة',
@@ -347,7 +450,8 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
 
           // 2. اختيار الصنف / الطقم
           DropdownButtonFormField<int>(
-            value: _selectedCategoryId,
+            key: ValueKey('primary_cat_${_selectedCategoryId ?? 'none'}'),
+            initialValue: _selectedCategoryId,
             decoration: const InputDecoration(
               labelText: 'اسم الطقم (الصنف) *',
               hintText: 'اختر الصنف لعرض قطعه',
@@ -527,7 +631,13 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
                                 c['selected'] = !allSelected;
                                 if (!allSelected) {
                                   final bq = (c['base_qty'] as int?) ?? 1;
-                                  c['qty'] = bq > 0 ? bq * (_orderSetsCount > 0 ? _orderSetsCount : 1) : 1;
+                                  final bool isCustomOrCross =
+                                      c['is_custom'] == true || c['source_category_id'] != null;
+                                  c['qty'] = isCustomOrCross
+                                      ? ((c['qty'] as int?) ?? 0) > 0
+                                          ? c['qty']
+                                          : 1
+                                      : bq * (_orderSetsCount > 0 ? _orderSetsCount : 1);
                                 } else {
                                   c['qty'] = 0;
                                 }
@@ -552,25 +662,30 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
                         final comp = entry.value;
                         final bool hasQty = (comp['qty'] as int) > 0;
                         final bool isSelected = comp['selected'] == true || hasQty;
+                        final bool isFromOtherCat = comp['source_category_id'] != null;
                         final bool isCustom = comp['is_custom'] == true;
                         final int baseQty = (comp['base_qty'] as int?) ?? 1;
 
                         return Container(
                           margin: const EdgeInsets.symmetric(vertical: 4),
                           decoration: BoxDecoration(
-                            color: isCustom
-                                ? Colors.blue.shade50.withValues(alpha: 0.6)
-                                : (isSelected
-                                    ? AppTheme.royalGold.withValues(alpha: 0.12)
-                                    : Colors.transparent),
+                            color: isFromOtherCat
+                                ? Colors.teal.shade50.withValues(alpha: 0.6)
+                                : (isCustom
+                                    ? Colors.blue.shade50.withValues(alpha: 0.6)
+                                    : (isSelected
+                                        ? AppTheme.royalGold.withValues(alpha: 0.12)
+                                        : Colors.transparent)),
                             borderRadius: BorderRadius.circular(10),
                             border: Border.all(
-                              color: isCustom
-                                  ? Colors.blue.shade300
-                                  : (isSelected
-                                      ? AppTheme.royalGold
-                                      : Colors.grey.shade300),
-                              width: (isSelected || isCustom) ? 1.5 : 1.0,
+                              color: isFromOtherCat
+                                  ? Colors.teal.shade300
+                                  : (isCustom
+                                      ? Colors.blue.shade300
+                                      : (isSelected
+                                          ? AppTheme.royalGold
+                                          : Colors.grey.shade300)),
+                              width: (isSelected || isCustom || isFromOtherCat) ? 1.5 : 1.0,
                             ),
                           ),
                           child: CheckboxListTile(
@@ -598,7 +713,19 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
                                     ),
                                   ),
                                 ),
-                                if (isCustom)
+                                if (isFromOtherCat)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: Colors.teal.shade100,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      'من طقم: ${comp['source_category_name']}',
+                                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.teal.shade900),
+                                    ),
+                                  )
+                                else if (isCustom)
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                     decoration: BoxDecoration(
@@ -613,9 +740,11 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
                               ],
                             ),
                             subtitle: Text(
-                              isCustom
-                                  ? 'قطعة إضافية مخصصة للطلب'
-                                  : 'النسبة لكل طقم: $baseQty قطعة',
+                              isFromOtherCat
+                                  ? 'قطعة فردية تُخصم من مخزون (${comp['source_category_name']}) عند التسليم'
+                                  : (isCustom
+                                      ? 'قطعة إضافية مخصصة للطلب'
+                                      : 'النسبة لكل طقم: $baseQty قطعة'),
                               style: const TextStyle(fontSize: 12),
                             ),
                             secondary: Row(
@@ -624,7 +753,7 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
                                 if (isCustom)
                                   IconButton(
                                     icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
-                                    tooltip: 'حذف هذه القطعة المخصصة',
+                                    tooltip: 'حذف هذه القطعة',
                                     onPressed: () {
                                       setState(() {
                                         _editableComponents.removeAt(idx);
@@ -706,6 +835,175 @@ class _NewOrderScreenState extends State<NewOrderScreen> {
                           'إضافة قطعة إضافية مخصصة للطلب (+)',
                           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                         ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // اختيار إضافة قطع فردية من طقم آخر
+                    Container(
+                      decoration: BoxDecoration(
+                        color: _addFromOtherCategory
+                            ? Colors.teal.shade50.withValues(alpha: 0.45)
+                            : Colors.grey.shade50,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: _addFromOtherCategory
+                              ? Colors.teal.shade400
+                              : Colors.grey.shade300,
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          CheckboxListTile(
+                            value: _addFromOtherCategory,
+                            activeColor: AppTheme.primaryNavy,
+                            title: const Text(
+                              'إضافة قطع من طقم آخر',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                                color: AppTheme.primaryNavy,
+                              ),
+                            ),
+                            subtitle: const Text(
+                              'مثل إضافة كنبة فرداني من صنف آخر ليتم خصمها من مخزونه عند التسليم',
+                              style: TextStyle(fontSize: 11.5),
+                            ),
+                            onChanged: (checked) {
+                              setState(() {
+                                _addFromOtherCategory = checked ?? false;
+                                if (!_addFromOtherCategory) {
+                                  _secondaryCategoryId = null;
+                                  _editableComponents.removeWhere(
+                                    (c) => c['source_category_id'] != null,
+                                  );
+                                }
+                              });
+                            },
+                          ),
+                          if (_addFromOtherCategory)
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                              child: _otherCategories.isEmpty
+                                  ? const Text(
+                                      'لا توجد أصناف أخرى مسجلة حالياً.',
+                                      style: TextStyle(color: Colors.grey, fontSize: 12.5),
+                                    )
+                                  : Column(
+                                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                                      children: [
+                                        DropdownButtonFormField<int>(
+                                          key: ValueKey('sec_cat_${_secondaryCategoryId ?? 'none'}'),
+                                          initialValue: _secondaryCategoryId,
+                                          decoration: const InputDecoration(
+                                            labelText: 'اختر الطقم الآخر *',
+                                            prefixIcon: Icon(Icons.weekend_outlined),
+                                            filled: true,
+                                            fillColor: Colors.white,
+                                          ),
+                                          isExpanded: true,
+                                          items: _otherCategories.map((c) {
+                                            return DropdownMenuItem<int>(
+                                              value: c['id'] as int,
+                                              child: Text('${c['name']} (رصيد: ${c['stock_qty']})'),
+                                            );
+                                          }).toList(),
+                                          onChanged: (val) => setState(() => _secondaryCategoryId = val),
+                                        ),
+                                        if (_secondaryCategory != null) ...[
+                                          const SizedBox(height: 10),
+                                          const Text(
+                                            'اختر القطع المطلوبة من هذا الطقم:',
+                                            style: TextStyle(
+                                              fontSize: 12.5,
+                                              fontWeight: FontWeight.bold,
+                                              color: AppTheme.primaryNavy,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 6),
+                                          ..._parseCategoryPieces(_secondaryCategory!).map((p) {
+                                            final String pName = p['name'] as String;
+                                            final int stockQ = p['stock_qty'] as int;
+                                            final int secId = _secondaryCategory!['id'] as int;
+                                            final int curQ = _getSecondaryPieceQty(secId, pName);
+
+                                            return Container(
+                                              margin: const EdgeInsets.symmetric(vertical: 3),
+                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                              decoration: BoxDecoration(
+                                                color: curQ > 0 ? Colors.white : Colors.white.withValues(alpha: 0.7),
+                                                borderRadius: BorderRadius.circular(10),
+                                                border: Border.all(
+                                                  color: curQ > 0 ? Colors.teal.shade400 : Colors.grey.shade300,
+                                                ),
+                                              ),
+                                              child: Row(
+                                                children: [
+                                                  Expanded(
+                                                    child: Column(
+                                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                                      children: [
+                                                        Text(
+                                                          pName,
+                                                          style: const TextStyle(
+                                                            fontWeight: FontWeight.bold,
+                                                            fontSize: 13.5,
+                                                          ),
+                                                        ),
+                                                        Text(
+                                                          'متاح بالمخزن: $stockQ قطعة',
+                                                          style: TextStyle(
+                                                            fontSize: 11,
+                                                            color: Colors.grey.shade700,
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                  IconButton(
+                                                    padding: EdgeInsets.zero,
+                                                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                                                    icon: Icon(
+                                                      Icons.remove_circle_outline,
+                                                      color: curQ > 0 ? Colors.red.shade700 : Colors.grey,
+                                                      size: 22,
+                                                    ),
+                                                    onPressed: curQ > 0
+                                                        ? () => _setSecondaryPieceQty(_secondaryCategory!, pName, curQ - 1)
+                                                        : null,
+                                                  ),
+                                                  Container(
+                                                    constraints: const BoxConstraints(minWidth: 28),
+                                                    alignment: Alignment.center,
+                                                    child: Text(
+                                                      '$curQ',
+                                                      style: const TextStyle(
+                                                        fontWeight: FontWeight.w900,
+                                                        fontSize: 15,
+                                                        color: AppTheme.primaryNavy,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  IconButton(
+                                                    padding: EdgeInsets.zero,
+                                                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                                                    icon: Icon(
+                                                      Icons.add_circle_outline,
+                                                      color: Colors.green.shade700,
+                                                      size: 22,
+                                                    ),
+                                                    onPressed: () => _setSecondaryPieceQty(_secondaryCategory!, pName, curQ + 1),
+                                                  ),
+                                                ],
+                                              ),
+                                            );
+                                          }),
+                                        ],
+                                      ],
+                                    ),
+                            ),
+                        ],
                       ),
                     ),
                   ],

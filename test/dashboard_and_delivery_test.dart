@@ -239,6 +239,87 @@ void main() {
         '1 طقم + 3 فردي',
       );
     });
+
+    test('computes primary and secondary category stock deductions on multi-category order delivery', () {
+      final kenzComps = [
+        {'name': 'كنبة كبيرة', 'base_qty': 1, 'qty': 3},
+        {'name': 'كنبة صغيرة', 'base_qty': 1, 'qty': 3},
+        {'name': 'فوتيه', 'base_qty': 2, 'qty': 6},
+      ];
+      final maasaComps = [
+        {'name': 'كنبة كبيرة', 'base_qty': 1, 'qty': 4},
+        {'name': 'فوتيه', 'base_qty': 2, 'qty': 8},
+      ];
+
+      final orderPieces = OrderDeliveryHelper.extractOrderPieces(
+        [
+          {'name': 'كنبة كبيرة', 'qty': 2, 'base_qty': 1},
+          {'name': 'كنبة صغيرة', 'qty': 2, 'base_qty': 1},
+          {'name': 'فوتيه', 'qty': 4, 'base_qty': 2},
+          {
+            'name': 'كنبة كبيرة (ماسه)',
+            'source_piece_name': 'كنبة كبيرة',
+            'source_category_id': 2,
+            'source_category_name': 'ماسه',
+            'qty': 2,
+            'base_qty': 0,
+            'is_custom': true,
+          },
+        ],
+        kenzComps,
+        setsCount: 2,
+      );
+
+      final summary = OrderDeliveryHelper.summarizeOrder(
+        orderComps: orderPieces,
+        rawCategoryComps: kenzComps,
+      );
+      expect(summary.sets, 2);
+      expect(summary.individualPieces, 2);
+      expect(summary.toOrangeBadgeLabel(), '2 طقم + 2 فردي');
+
+      final deliverMap = {
+        for (final p in orderPieces) p['name'] as String: p['qty'] as int,
+      };
+      final calc = OrderDeliveryHelper.computeDelivery(
+        orderPieces: orderPieces,
+        deliverQuantities: deliverMap,
+        rawCategoryComps: kenzComps,
+        fallbackCategoryStock: 3,
+        primaryCategoryId: 1,
+      );
+
+      // المخزن الأساسي (كنز) يخصم 2 طقم فقط ولا يتأثر بكنبة ماسه
+      expect(calc.isFullDelivery, isTrue);
+      expect(calc.newCategorySets, 1);
+      expect(calc.updatedCategoryComps, [
+        {'name': 'كنبة كبيرة', 'base_qty': 1, 'qty': 1},
+        {'name': 'كنبة صغيرة', 'base_qty': 1, 'qty': 1},
+        {'name': 'فوتيه', 'base_qty': 2, 'qty': 2},
+      ]);
+
+      // مخزن الصنف الآخر (ماسه) يخصم 2 كنبة كبيرة ويُعاد حساب أطقم ماسه
+      final secUpdates = OrderDeliveryHelper.computeSecondaryCategoryStockUpdates(
+        deliveredComps: calc.deliveredComps,
+        primaryCategoryId: 1,
+        categoriesById: {
+          2: {
+            'id': 2,
+            'name': 'ماسه',
+            'stock_qty': 4,
+            'components_json': jsonEncode(maasaComps),
+          },
+        },
+      );
+      expect(secUpdates.length, 1);
+      expect(secUpdates.first.categoryId, 2);
+      expect(secUpdates.first.categoryName, 'ماسه');
+      expect(secUpdates.first.newStockSets, 2);
+      expect(secUpdates.first.updatedComps, [
+        {'name': 'كنبة كبيرة', 'base_qty': 1, 'qty': 2},
+        {'name': 'فوتيه', 'base_qty': 2, 'qty': 8},
+      ]);
+    });
   });
 
   testWidgets('OrderCard shows mixed sets + individual label in orange badge', (tester) async {

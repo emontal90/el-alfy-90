@@ -535,6 +535,7 @@ class _WaitingOrdersScreenState extends State<WaitingOrdersScreen> {
             deliverQuantities: partialDeliverMap,
             rawCategoryComps: rawCatComps,
             fallbackCategoryStock: oldCatStock,
+            primaryCategoryId: order['category_id'] as int?,
           );
 
           final int currentDeliverCount = livePreview.totalDeliveredPieces;
@@ -961,15 +962,18 @@ class _WaitingOrdersScreenState extends State<WaitingOrdersScreen> {
                                 try {
                                   final Map<String, int> deliverMap = partialDeliverMap;
 
+                                  final int? primaryCatId = order['category_id'] as int?;
                                   final calc = OrderDeliveryHelper.computeDelivery(
                                     orderPieces: orderPieces,
                                     deliverQuantities: deliverMap,
                                     rawCategoryComps: rawCatComps,
                                     fallbackCategoryStock: oldCatStock,
+                                    primaryCategoryId: primaryCatId,
                                   );
 
                                   final todayStr =
                                       intl.DateFormat('yyyy-MM-dd').format(DateTime.now());
+                                  List<SecondaryCategoryStockUpdate> secondaryUpdates = const [];
 
                                   await db.transaction((txn) async {
                                     if (orderPieces.isEmpty || calc.isFullDelivery) {
@@ -1027,6 +1031,45 @@ class _WaitingOrdersScreenState extends State<WaitingOrdersScreen> {
                                         whereArgs: [order['category_id']],
                                       );
                                     }
+
+                                    // 3) خصم القطع المضافة من أطقم أخرى من مخزون تلك الأطقم
+                                    final secondaryIds = calc.deliveredComps
+                                        .map((c) => c['source_category_id'] as int?)
+                                        .whereType<int>()
+                                        .where((id) => id != primaryCatId)
+                                        .toSet()
+                                        .toList();
+
+                                    if (secondaryIds.isNotEmpty) {
+                                      final Map<int, Map<String, dynamic>> secCatsById = {};
+                                      for (final secId in secondaryIds) {
+                                        final rows = await txn.query(
+                                          'categories',
+                                          where: 'id = ?',
+                                          whereArgs: [secId],
+                                        );
+                                        if (rows.isNotEmpty) {
+                                          secCatsById[secId] = rows.first;
+                                        }
+                                      }
+                                      secondaryUpdates =
+                                          OrderDeliveryHelper.computeSecondaryCategoryStockUpdates(
+                                        deliveredComps: calc.deliveredComps,
+                                        categoriesById: secCatsById,
+                                        primaryCategoryId: primaryCatId,
+                                      );
+                                      for (final upd in secondaryUpdates) {
+                                        await txn.update(
+                                          'categories',
+                                          {
+                                            'stock_qty': upd.newStockSets,
+                                            'components_json': jsonEncode(upd.updatedComps),
+                                          },
+                                          where: 'id = ?',
+                                          whereArgs: [upd.categoryId],
+                                        );
+                                      }
+                                    }
                                   });
 
                                   final String summaryPieces = calc.deliveredComps
@@ -1046,6 +1089,22 @@ class _WaitingOrdersScreenState extends State<WaitingOrdersScreen> {
                                         ? 'تسليم أوردر للعميل: ${order['customer_name']} (أصبح رصيد الأطقم بالمخزن ${calc.newCategorySets})'
                                         : 'تسليم جزئي للعميل: ${order['customer_name']} [$summaryPieces] (المتبقي بالمخزن ${calc.newCategorySets} طقم)',
                                   );
+
+                                  for (final upd in secondaryUpdates) {
+                                    final secSummary = upd.deductedPieces
+                                        .map((p) => '${p['name']}: ${p['qty']}')
+                                        .join('، ');
+                                    final int secDelta = upd.newStockSets - upd.oldStockSets;
+                                    await StockMovementHelper.logMovement(
+                                      categoryId: upd.categoryId,
+                                      categoryName: upd.categoryName,
+                                      movementType: 'delivered_out',
+                                      qtyChange: secDelta,
+                                      stockAfter: upd.newStockSets,
+                                      notes:
+                                          'تسليم قطع فردية ضمن طلب العميل: ${order['customer_name']} [$secSummary] (المتبقي بالمخزن ${upd.newStockSets} طقم)',
+                                    );
+                                  }
 
                                   AppEvents.instance.notifyAll();
                                   if (ctx.mounted) Navigator.pop(ctx);
