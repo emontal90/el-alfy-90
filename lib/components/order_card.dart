@@ -409,48 +409,61 @@ class OrderCard extends StatelessWidget {
             // أزرار العمليات (إلغاء الطلب / تعديل الطلب / تسليم الطلب)
             if (!isDelivered && (onDeletePressed != null || onEditPressed != null || onDeliverPressed != null)) ...[
               const SizedBox(height: 10),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
+              Wrap(
+                alignment: WrapAlignment.end,
+                spacing: 6,
+                runSpacing: 6,
                 children: [
-                  if (onDeletePressed != null) ...[
+                  if (onDeletePressed != null)
                     ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.red.shade700,
                         foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       ),
                       onPressed: onDeletePressed,
-                      icon: const Icon(Icons.cancel_outlined, size: 17),
-                      label: const Text('إلغاء الطلب', style: TextStyle(fontWeight: FontWeight.bold)),
+                      icon: const Icon(Icons.cancel_outlined, size: 14),
+                      label: const Text(
+                        'إلغاء الطلب',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5),
+                      ),
                     ),
-                    const SizedBox(width: 8),
-                  ],
                   if (onEditPressed != null)
                     ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppTheme.primaryNavy,
                         foregroundColor: AppTheme.royalGold,
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       ),
                       onPressed: onEditPressed,
-                      icon: const Icon(Icons.edit, size: 17),
-                      label: const Text('تعديل الطلب', style: TextStyle(fontWeight: FontWeight.bold)),
+                      icon: const Icon(Icons.edit, size: 14),
+                      label: const Text(
+                        'تعديل الطلب',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5),
+                      ),
                     ),
-                  if (onEditPressed != null && onDeliverPressed != null)
-                    const SizedBox(width: 8),
                   if (onDeliverPressed != null)
                     ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.green.shade700,
                         foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       ),
                       onPressed: onDeliverPressed,
-                      icon: const Icon(Icons.check_circle, size: 17),
-                      label: const Text('تسليم الطلب', style: TextStyle(fontWeight: FontWeight.bold)),
+                      icon: const Icon(Icons.check_circle, size: 14),
+                      label: const Text(
+                        'تسليم الطلب',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5),
+                      ),
                     ),
                 ],
               ),

@@ -128,6 +128,67 @@ class _WaitingOrdersScreenState extends State<WaitingOrdersScreen> {
       setsCount: initialOrderSets,
     );
 
+    int? secondaryCategoryId;
+    bool addFromOtherCategory = editableComps.any((c) => c['source_category_id'] != null);
+    if (addFromOtherCategory) {
+      final firstSec = editableComps.firstWhere((c) => c['source_category_id'] != null);
+      secondaryCategoryId = firstSec['source_category_id'] as int?;
+    }
+
+    List<Map<String, dynamic>> parseCategoryPieces(Map<String, dynamic> cat) {
+      List decoded = [];
+      try {
+        final raw = jsonDecode((cat['components_json'] ?? '[]').toString());
+        if (raw is List) decoded = raw;
+      } catch (_) {}
+      return decoded.whereType<Map>().map((e) {
+        final int stockQty = (e['qty'] is int)
+            ? e['qty'] as int
+            : (int.tryParse(e['qty']?.toString() ?? '0') ?? 0);
+        return {
+          'name': (e['name'] ?? '').toString(),
+          'stock_qty': stockQty,
+        };
+      }).where((e) => (e['name'] as String).isNotEmpty).toList();
+    }
+
+    int getSecondaryPieceQty(int secCatId, String pieceName) {
+      for (final c in editableComps) {
+        if (c['source_category_id'] == secCatId &&
+            c['source_piece_name'] == pieceName) {
+          return (c['qty'] as int?) ?? 0;
+        }
+      }
+      return 0;
+    }
+
+    void setSecondaryPieceQty(Map<String, dynamic> secCat, String pieceName, int newQty) {
+      final int secCatId = secCat['id'] as int;
+      final String secCatName = (secCat['name'] ?? '').toString();
+      final existingIdx = editableComps.indexWhere(
+        (c) => c['source_category_id'] == secCatId && c['source_piece_name'] == pieceName,
+      );
+      if (newQty <= 0) {
+        if (existingIdx != -1) {
+          editableComps.removeAt(existingIdx);
+        }
+      } else if (existingIdx != -1) {
+        editableComps[existingIdx]['qty'] = newQty;
+      } else {
+        editableComps.add({
+          'name': '$pieceName ($secCatName)',
+          'source_piece_name': pieceName,
+          'source_category_id': secCatId,
+          'source_category_name': secCatName,
+          'base_qty': 0,
+          'qty': newQty,
+          'original_qty': 0,
+          'selected': true,
+          'is_custom': true,
+        });
+      }
+    }
+
     final bool existingCatPresent =
         categories.any((c) => c['id'] == selectedCategoryId);
 
@@ -139,7 +200,14 @@ class _WaitingOrdersScreenState extends State<WaitingOrdersScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setModalState) => Padding(
+        builder: (ctx, setModalState) {
+        final otherCategories = categories.where((c) => c['id'] != selectedCategoryId).toList();
+        final secondaryCategory = otherCategories.cast<Map<String, dynamic>?>().firstWhere(
+              (c) => c?['id'] == secondaryCategoryId,
+              orElse: () => null,
+            );
+
+        return Padding(
           padding: AppTheme.modalSheetPadding(ctx),
           child: SingleChildScrollView(
             child: Column(
@@ -206,11 +274,15 @@ class _WaitingOrdersScreenState extends State<WaitingOrdersScreen> {
                       setModalState(() {
                         selectedCategoryId = newCatId;
                         selectedCategoryName = (matched['name'] ?? '').toString();
-                        editableComps = OrderDeliveryHelper.extractOrderPieces(
-                          const [],
-                          newCatComps,
-                          setsCount: targetSets,
-                        );
+                        final secPieces = editableComps.where((c) => c['source_category_id'] != null).toList();
+                        editableComps = [
+                          ...OrderDeliveryHelper.extractOrderPieces(
+                            const [],
+                            newCatComps,
+                            setsCount: targetSets,
+                          ),
+                          ...secPieces,
+                        ];
                       });
                     },
                   ),
@@ -336,22 +408,50 @@ class _WaitingOrdersScreenState extends State<WaitingOrdersScreen> {
                 ),
                 const SizedBox(height: 8),
                 ...editableComps.asMap().entries.map((entry) {
+                  final index = entry.key;
                   final comp = entry.value;
+                  final bool isFromOtherCat = comp['source_category_id'] != null;
+
                   return Container(
                     margin: const EdgeInsets.symmetric(vertical: 4),
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: isFromOtherCat ? const Color(0xFFF0FDFA) : Colors.white,
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.grey.shade300),
+                      border: Border.all(
+                        color: isFromOtherCat ? const Color(0xFF99F6E4) : Colors.grey.shade300,
+                      ),
                     ),
                     child: Row(
                       children: [
                         Expanded(
-                          child: Text(comp['name'],
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.bold, fontSize: 15)),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                comp['name'],
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                              ),
+                              if (isFromOtherCat)
+                                Container(
+                                  margin: const EdgeInsets.only(top: 2),
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFCCFBF1),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: const Color(0xFF5EEAD4)),
+                                  ),
+                                  child: Text(
+                                    'من طقم: ${comp['source_category_name']}',
+                                    style: const TextStyle(
+                                      fontSize: 10.5,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF0F766E),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
                         ),
                         // زر إنقاص
                         Material(
@@ -366,17 +466,17 @@ class _WaitingOrdersScreenState extends State<WaitingOrdersScreen> {
                             },
                             child: const Padding(
                               padding: EdgeInsets.all(6.0),
-                              child: Icon(Icons.remove,
-                                  color: Colors.red, size: 20),
+                              child: Icon(Icons.remove, color: Colors.red, size: 20),
                             ),
                           ),
                         ),
                         Container(
                           constraints: const BoxConstraints(minWidth: 36),
                           alignment: Alignment.center,
-                          child: Text('${comp['qty']}',
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.bold, fontSize: 17)),
+                          child: Text(
+                            '${comp['qty']}',
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
+                          ),
                         ),
                         // زر زيادة
                         Material(
@@ -389,15 +489,249 @@ class _WaitingOrdersScreenState extends State<WaitingOrdersScreen> {
                             },
                             child: const Padding(
                               padding: EdgeInsets.all(6.0),
-                              child: Icon(Icons.add,
-                                  color: Colors.green, size: 20),
+                              child: Icon(Icons.add, color: Colors.green, size: 20),
                             ),
                           ),
                         ),
+                        if (isFromOtherCat) ...[
+                          const SizedBox(width: 4),
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
+                            tooltip: 'إزالة هذه القطعة',
+                            onPressed: () {
+                              setModalState(() {
+                                editableComps.removeAt(index);
+                              });
+                            },
+                          ),
+                        ],
                       ],
                     ),
                   );
                 }),
+                const SizedBox(height: 12),
+
+                // فاصل أنيق وبسيط قبل قسم إضافة قطع من طقم آخر
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Row(
+                    children: [
+                      Expanded(child: Divider(color: Colors.teal.shade200, thickness: 1)),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.style_outlined, size: 16, color: Colors.teal.shade700),
+                            const SizedBox(width: 5),
+                            Text(
+                              'قطع إضافية من أطقم أخرى',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.teal.shade800,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Expanded(child: Divider(color: Colors.teal.shade200, thickness: 1)),
+                    ],
+                  ),
+                ),
+
+                // اختيار إضافة قطع فردية من طقم آخر بخلفية مميزة
+                Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: addFromOtherCategory
+                          ? [const Color(0xFFE6FFFA), const Color(0xFFCCFBF1)]
+                          : [const Color(0xFFF0FDFA), const Color(0xFFF8FAFC)],
+                      begin: Alignment.topRight,
+                      end: Alignment.bottomLeft,
+                    ),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: addFromOtherCategory
+                          ? const Color(0xFF0D9488)
+                          : const Color(0xFF99F6E4),
+                      width: 1.5,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF0D9488).withValues(alpha: addFromOtherCategory ? 0.12 : 0.05),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      CheckboxListTile(
+                        value: addFromOtherCategory,
+                        activeColor: const Color(0xFF0F766E),
+                        checkColor: Colors.white,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                        title: const Row(
+                          children: [
+                            Icon(Icons.add_shopping_cart_rounded, size: 20, color: Color(0xFF0F766E)),
+                            SizedBox(width: 8),
+                            Text(
+                              'إضافة قطع من طقم آخر',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14.5,
+                                color: Color(0xFF0F766E),
+                              ),
+                            ),
+                          ],
+                        ),
+                        subtitle: const Padding(
+                          padding: EdgeInsets.only(top: 4),
+                          child: Text(
+                            'مثل إضافة كنبة فرداني من صنف آخر ليتم خصمها من مخزونه عند التسليم',
+                            style: TextStyle(fontSize: 11.5, color: Color(0xFF115E59)),
+                          ),
+                        ),
+                        onChanged: (checked) {
+                          setModalState(() {
+                            addFromOtherCategory = checked ?? false;
+                            if (!addFromOtherCategory) {
+                              secondaryCategoryId = null;
+                              editableComps.removeWhere(
+                                (c) => c['source_category_id'] != null,
+                              );
+                            }
+                          });
+                        },
+                      ),
+                      if (addFromOtherCategory)
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                          child: otherCategories.isEmpty
+                              ? const Text(
+                                  'لا توجد أصناف أخرى مسجلة حالياً.',
+                                  style: TextStyle(color: Colors.grey, fontSize: 12.5),
+                                )
+                              : Column(
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  children: [
+                                    DropdownButtonFormField<int>(
+                                      key: ValueKey('sec_cat_${secondaryCategoryId ?? 'none'}'),
+                                      initialValue: secondaryCategoryId,
+                                      decoration: const InputDecoration(
+                                        labelText: 'اختر الطقم الآخر *',
+                                        prefixIcon: Icon(Icons.weekend_outlined),
+                                        filled: true,
+                                        fillColor: Colors.white,
+                                      ),
+                                      isExpanded: true,
+                                      items: otherCategories.map((c) {
+                                        return DropdownMenuItem<int>(
+                                          value: c['id'] as int,
+                                          child: Text('${c['name']} (رصيد: ${c['stock_qty']})'),
+                                        );
+                                      }).toList(),
+                                      onChanged: (val) {
+                                        setModalState(() => secondaryCategoryId = val);
+                                      },
+                                    ),
+                                    if (secondaryCategory != null) ...[
+                                      const SizedBox(height: 10),
+                                      const Text(
+                                        'اختر القطع المطلوبة من هذا الطقم:',
+                                        style: TextStyle(
+                                          fontSize: 12.5,
+                                          fontWeight: FontWeight.bold,
+                                          color: AppTheme.primaryNavy,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 6),
+                                      ...parseCategoryPieces(secondaryCategory).map((p) {
+                                        final String pName = p['name'] as String;
+                                        final int stockQ = p['stock_qty'] as int;
+                                        final int secId = secondaryCategory['id'] as int;
+                                        final int curQ = getSecondaryPieceQty(secId, pName);
+
+                                        return Container(
+                                          margin: const EdgeInsets.symmetric(vertical: 3),
+                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                          decoration: BoxDecoration(
+                                            color: curQ > 0 ? Colors.white : Colors.white.withValues(alpha: 0.7),
+                                            borderRadius: BorderRadius.circular(10),
+                                            border: Border.all(
+                                              color: curQ > 0 ? Colors.teal.shade400 : Colors.grey.shade300,
+                                            ),
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              Expanded(
+                                                child: Column(
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  children: [
+                                                    Text(
+                                                      pName,
+                                                      style: const TextStyle(
+                                                        fontWeight: FontWeight.bold,
+                                                        fontSize: 13.5,
+                                                      ),
+                                                    ),
+                                                    Text(
+                                                      'متاح بالمخزن: $stockQ قطعة',
+                                                      style: TextStyle(
+                                                        fontSize: 11,
+                                                        color: Colors.grey.shade700,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                              IconButton(
+                                                padding: EdgeInsets.zero,
+                                                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                                                icon: Icon(
+                                                  Icons.remove_circle_outline,
+                                                  color: curQ > 0 ? Colors.red.shade700 : Colors.grey,
+                                                  size: 22,
+                                                ),
+                                                onPressed: curQ > 0
+                                                    ? () => setModalState(() => setSecondaryPieceQty(secondaryCategory, pName, curQ - 1))
+                                                    : null,
+                                              ),
+                                              Container(
+                                                constraints: const BoxConstraints(minWidth: 28),
+                                                alignment: Alignment.center,
+                                                child: Text(
+                                                  '$curQ',
+                                                  style: const TextStyle(
+                                                    fontWeight: FontWeight.w900,
+                                                    fontSize: 15,
+                                                    color: AppTheme.primaryNavy,
+                                                  ),
+                                                ),
+                                              ),
+                                              IconButton(
+                                                padding: EdgeInsets.zero,
+                                                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                                                icon: Icon(
+                                                  Icons.add_circle_outline,
+                                                  color: Colors.green.shade700,
+                                                  size: 22,
+                                                ),
+                                                onPressed: () => setModalState(() => setSecondaryPieceQty(secondaryCategory, pName, curQ + 1)),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                      }),
+                                    ],
+                                  ],
+                                ),
+                        ),
+                    ],
+                  ),
+                ),
                 const SizedBox(height: 18),
                 ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
@@ -452,10 +786,11 @@ class _WaitingOrdersScreenState extends State<WaitingOrdersScreen> {
               ],
             ),
           ),
-        ),
-      ),
-    );
-  }
+        );
+      },
+    ),
+  );
+}
 
   Future<void> _confirmCancelOrder(Map<String, dynamic> order) async {
     final custName = (order['customer_name'] ?? '').toString();

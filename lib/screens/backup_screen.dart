@@ -419,6 +419,100 @@ class _BackupScreenState extends State<BackupScreen> {
     }
   }
 
+  // 7. إعادة ضبط المصنع مع رسالتي تأكيد متتاليتين
+  Future<void> _confirmFactoryReset() async {
+    // رسالة التأكيد الأولى
+    final bool? firstConfirm = await showDialog<bool>(
+      context: context,
+      builder: (dCtx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.red, size: 28),
+            SizedBox(width: 8),
+            Text('إعادة ضبط المصنع', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.red)),
+          ],
+        ),
+        content: const Text(
+          'تحذير هام!\n\n'
+          'هل أنت متأكد من رغبتك في إعادة ضبط المصنع وتصفير كافة بيانات البرنامج؟\n\n'
+          '✓ سيتم تصفير جميع الطلبات، العملاء، الأصناف، المخزن، ودفعات المنجد.\n'
+          '✓ سيتم الإبقاء على ملفات النسخ الاحتياطية المحفوظة دون أي مساس لتتمكن من استعادتها لاحقاً إذا رغبت.',
+          style: TextStyle(fontSize: 14, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dCtx, false),
+            child: const Text('إلغاء', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red.shade700,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () => Navigator.pop(dCtx, true),
+            child: const Text('متابعة'),
+          ),
+        ],
+      ),
+    );
+
+    if (firstConfirm != true || !mounted) return;
+
+    // رسالة التأكيد الثانية والأخيرة
+    final bool? secondConfirm = await showDialog<bool>(
+      context: context,
+      builder: (dCtx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.delete_forever_rounded, color: Colors.red, size: 28),
+            SizedBox(width: 8),
+            Text('تأكيد نهائي وحاسم', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.red)),
+          ],
+        ),
+        content: const Text(
+          'هل أنت متأكد تماماً من هذه الخطوة؟\n\n'
+          'سيتم الآن حذف وتصفير جميع بيانات البرنامج الحالية نهائياً.\n\n'
+          'اضغط على (تأكيد تصفير البيانات) للمتابعة.',
+          style: TextStyle(fontSize: 14, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dCtx, false),
+            child: const Text('تراجع', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () => Navigator.pop(dCtx, true),
+            child: const Text('تأكيد تصفير البيانات'),
+          ),
+        ],
+      ),
+    );
+
+    if (secondConfirm == true && mounted) {
+      setState(() => _isLoading = true);
+      final success = await BackupService.factoryReset();
+      await _loadAllInfo();
+      if (mounted) {
+        if (success) {
+          AppNotification.showSuccess(
+            context,
+            'تمت إعادة ضبط المصنع وتصفير بيانات البرنامج بنجاح، مع بقاء نسخك الاحتياطية محفوظة بأمان.',
+          );
+        } else {
+          AppNotification.showError(context, 'حدث خطأ أثناء محاولة تصفير البيانات.');
+        }
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final Widget bodyContent = SafeArea(
@@ -902,6 +996,59 @@ class _BackupScreenState extends State<BackupScreen> {
                       ),
                     );
                   }),
+                const SizedBox(height: 20),
+
+                // 5. قسم إعادة ضبط المصنع
+                Card(
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    side: BorderSide(color: Colors.red.shade300, width: 1.2),
+                  ),
+                  color: Colors.red.shade50.withValues(alpha: 0.5),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.warning_amber_rounded, color: Colors.red.shade700, size: 24),
+                            const SizedBox(width: 8),
+                            Text(
+                              'إعادة ضبط المصنع',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.red.shade800,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'تصفير وتفريغ جميع بيانات البرنامج (الزبائن، الأصناف، المخزن، الطلبات، ودفعات المنجد)، مع الإبقاء على ملفات النسخ الاحتياطية المحفوظة دون أي مساس لتتمكن من استعادتها في أي وقت.',
+                          style: TextStyle(fontSize: 12.5, color: Colors.red.shade900, height: 1.45),
+                        ),
+                        const SizedBox(height: 14),
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.red.shade700,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                          onPressed: _confirmFactoryReset,
+                          icon: const Icon(Icons.restore_page_outlined, size: 20),
+                          label: const Text(
+                            'إعادة ضبط المصنع وتصفير البيانات',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
                 const SizedBox(height: 30),
               ],
             ),

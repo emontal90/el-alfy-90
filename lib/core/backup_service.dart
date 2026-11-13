@@ -496,4 +496,31 @@ class BackupService {
       return -1;
     }
   }
+
+  /// إعادة ضبط المصنع: تصفير وتفريغ جميع جداول قاعدة البيانات مع الحفاظ على ملفات النسخ الاحتياطية
+  static Future<bool> factoryReset() async {
+    try {
+      final db = await DBHelper.instance.database;
+      await db.transaction((txn) async {
+        await txn.delete('orders');
+        try { await txn.delete('archived_orders'); } catch (_) {}
+        try { await txn.delete('customers'); } catch (_) {}
+        try { await txn.delete('categories'); } catch (_) {}
+        try { await txn.delete('upholsterer_batches'); } catch (_) {}
+        try { await txn.delete('upholsterer_transactions'); } catch (_) {}
+        try { await txn.delete('stock_movements'); } catch (_) {}
+        try { await txn.delete('app_settings'); } catch (_) {}
+      });
+
+      try {
+        await db.execute('PRAGMA optimize');
+        await db.execute('VACUUM');
+      } catch (_) {}
+
+      AppEvents.instance.notifyAll();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
 }

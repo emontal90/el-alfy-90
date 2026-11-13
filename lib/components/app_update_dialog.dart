@@ -197,32 +197,17 @@ class _AppUpdateDialogState extends State<AppUpdateDialog> {
                 ],
               ),
             ),
-            if (_stage == _UpdateDialogStage.prompt &&
-                widget.update.releaseNotes.isNotEmpty) ...[
-              const SizedBox(height: 12),
+            if (_stage == _UpdateDialogStage.prompt) ...[
+              const SizedBox(height: 6),
               const Text(
-                'تفاصيل التحديث:',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 4),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade50,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.grey.shade200),
-                ),
-                child: Text(
-                  widget.update.releaseNotes,
-                  style: const TextStyle(fontSize: 12.5, height: 1.45),
-                ),
+                'يتوفر إصدار وتحديث جديد للنظام لتحسين الأداء والوظائف.',
+                style: TextStyle(fontSize: 13.5, height: 1.5, color: Colors.black87),
               ),
             ],
             if (_stage == _UpdateDialogStage.downloading) ...[
               const SizedBox(height: 16),
               const Text(
-                'جارٍ تنزيل التحديث بشكل آمن من GitHub...',
+                'جارٍ تنزيل التحديث...',
                 style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 10),
@@ -308,11 +293,6 @@ class _AppUpdateDialogState extends State<AppUpdateDialog> {
             onPressed: () => Navigator.of(context).pop(),
             child: const Text('لاحقاً', style: TextStyle(color: Colors.grey)),
           ),
-          if (!kIsWeb && Platform.isAndroid)
-            TextButton(
-              onPressed: _openInBrowser,
-              child: const Text('عبر المتصفح'),
-            ),
           ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
               backgroundColor: AppTheme.primaryNavy,

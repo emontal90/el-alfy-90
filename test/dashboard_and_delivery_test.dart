@@ -577,6 +577,35 @@ void main() {
     expect(summary.status, OrderCompletenessStatus.incomplete);
   });
 
+  test('Adding pieces from another set in order edit attaches source_category metadata and preserves counts', () {
+    final compsWithSecondary = [
+      {'name': 'كنبة كبيرة', 'qty': 1, 'base_qty': 1},
+      {
+        'name': 'فوتيه (صالون لويس)',
+        'source_piece_name': 'فوتيه',
+        'source_category_id': 5,
+        'source_category_name': 'صالون لويس',
+        'base_qty': 0,
+        'qty': 2,
+        'is_custom': true,
+      },
+    ];
+
+    final summary = OrderDeliveryHelper.summarizeOrder(
+      orderComps: compsWithSecondary,
+      rawCategoryComps: [
+        {'name': 'كنبة كبيرة', 'qty': 1},
+        {'name': 'كنبة صغيرة', 'qty': 1},
+      ],
+      fallbackSetsCount: 1,
+    );
+
+    expect(summary.totalPieces, 3);
+    final secComp = compsWithSecondary.firstWhere((c) => c['source_category_id'] == 5);
+    expect(secComp['source_category_name'], 'صالون لويس');
+    expect(secComp['qty'], 2);
+  });
+
   testWidgets('Component card for secondary category pieces renders horizontally with badge and counter', (tester) async {
     final comp = {
       'name': 'كنبة كبيرة',

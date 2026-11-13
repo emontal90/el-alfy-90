@@ -171,7 +171,7 @@ class _GeneralSettingsTabState extends State<_GeneralSettingsTab> {
       setState(() => _isCheckingUpdate = false);
       AppNotification.showError(
         context,
-        'تعذر الاتصال بـ GitHub للتحقق من التحديثات. تأكد من اتصال الإنترنت.',
+        'تعذر التحقق من وجود تحديثات. يرجى التأكد من اتصال الإنترنت.',
       );
     }
   }

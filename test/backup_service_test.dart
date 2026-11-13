@@ -3,8 +3,15 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:furniture_erp/core/backup_service.dart';
 import 'package:path/path.dart' as p;
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void main() {
+  setUpAll(() {
+    if (Platform.isWindows || Platform.isLinux) {
+      sqfliteFfiInit();
+      databaseFactory = databaseFactoryFfi;
+    }
+  });
   test('BackupService.enforceMaxBackupLimit keeps at most 5 newest .db files', () async {
     final tempDir = await Directory.systemTemp.createTemp('el_alfy_backup_test_');
     addTearDown(() async {
@@ -57,6 +64,25 @@ void main() {
       }),
     );
     expect(await noteFile.exists(), isTrue);
+  });
+
+  test('BackupService.factoryReset clears tables and keeps backups directory untouched', () async {
+    final tempDir = await Directory.systemTemp.createTemp('el_alfy_backup_preserve_test_');
+    addTearDown(() async {
+      if (await tempDir.exists()) {
+        await tempDir.delete(recursive: true);
+      }
+    });
+
+    final backupFile = File(p.join(tempDir.path, 'manual_backup_2026-11-10.db'));
+    await backupFile.writeAsString('backup data');
+
+    final result = await BackupService.factoryReset();
+    expect(result, isTrue);
+
+    // التحقق من بقاء ملف النسخة الاحتياطية سليم تماماً
+    expect(await backupFile.exists(), isTrue);
+    expect(await backupFile.readAsString(), 'backup data');
   });
 }
 
